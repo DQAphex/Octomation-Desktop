@@ -5,7 +5,10 @@ __pycache__/
 
 # C extensions
 *.so
-
+release/
+dist/
+out/
+*.blockmap
 # Distribution / packaging
 .Python
 build/

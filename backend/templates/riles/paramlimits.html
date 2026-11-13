@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block extra_css %}
+  <link rel="stylesheet" href="{{ url_for('static', path='style/riles/style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='style/riles/params.css') }}">
+{% endblock %}
+{% block content %}
+<div class="params-container">
+
+  <!-- Sección para cargar archivo CSV / Excel -->
+  <div class="upload-section">
+    <form id="uploadForm">
+      <label for="fileInput">Cargar parámetros desde archivo (CSV/Excel):</label>
+      <input type="file" id="fileInput" accept=".csv, .xlsx" required>
+      <button type="submit">Subir Archivo</button>
+    </form>
+  </div>
+  <!-- Tabla y Formulario de parámetros -->
+  <form id="parametersForm">
+    <button type="submit">Guardar Todos los Cambios</button>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Parámetro</th>
+          <th>Unidad</th>
+          <th>Expresión</th>
+          <th>Mínimo</th>
+          <th>Máximo</th>
+          <th>Tolerancia (-)</th>
+          <th>Tolerancia (+)</th>
+        </tr>
+      </thead>
+      <tbody id="parametersTableBody">
+        <!-- Las filas se cargarán automáticamente vía JS -->
+      </tbody>
+    </table>
+  </form>
+
+<script>
+  const API_URL = "/medioambiente/riles/api/v1/parameter-limits";
+
+  // Cargar parámetros al iniciar
+  document.addEventListener("DOMContentLoaded", fetchParameters);
+
+  async function fetchParameters() {
+    try {
+      const response = await fetch(API_URL);
+      const data = await response.json();
+      renderFormRows(data);
+    } catch (error) {
+      alert("Error al cargar los parámetros");
+    }
+  }
+
+  function renderFormRows(parameters) {
+    const tbody = document.getElementById("parametersTableBody");
+    tbody.innerHTML = "";
+
+    parameters.forEach((param) => {
+      const tr = document.createElement("tr");
+      tr.classList.add("param-row");
+      tr.dataset.id = param.id;
+
+      // Helper para formatear a 1 decimal si existe el valor
+      const fmt = (val) => (val !== null && val !== undefined) ? Number(val).toFixed(1) : '';
+
+      tr.innerHTML = `
+        <td>${param.id}</td>
+        <td><input type="text" name="parametro" value="${param.parametro || ''}" required></td>
+        <td><input type="text" name="unidad" value="${param.unidad || ''}"></td>
+        <td><input type="text" name="expresion" value="${param.expresion || ''}"></td>
+        <td><input type="number" step="0.1" name="minimo" value="${fmt(param.minimo)}"></td>
+        <td><input type="number" step="0.1" name="maximo" value="${fmt(param.maximo)}"></td>
+        <td><input type="number" step="0.1" name="tolerancia_minimo" value="${fmt(param.tolerancia_minimo)}"></td>
+        <td><input type="number" step="0.1" name="tolerancia_maximo" value="${fmt(param.tolerancia_maximo)}"></td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // Manejador para la subida de archivos (CSV/Excel)
+  document.getElementById("uploadForm").addEventListener("submit", async function (event) {
+    event.preventDefault();
+
+    const fileInput = document.getElementById("fileInput");
+    if (!fileInput.files.length) {
+      alert("Por favor selecciona un archivo.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", fileInput.files[0]);
+
+    try {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        body: formData
+      });
+
+      if (response.ok) {
+        alert("Archivo subido y procesado con éxito");
+        fileInput.value = "";
+        fetchParameters(); // Recargar la tabla con los nuevos datos
+      } else {
+        const errorData = await response.json();
+        alert(`Error al procesar el archivo: ${errorData.detail || "Error desconocido"}`);
+      }
+    } catch (error) {
+      alert("Error de conexión al subir el archivo");
+    }
+  });
+
+  // Manejador para guardar cambios masivos vía PUT
+  document.getElementById("parametersForm").addEventListener("submit", async function (event) {
+    event.preventDefault();
+
+    const rows = document.querySelectorAll(".param-row");
+    const requests = [];
+
+    rows.forEach((row) => {
+      const id = row.dataset.id;
+      const getVal = (name) => row.querySelector(`[name="${name}"]`).value;
+      const getNumVal = (name) => {
+        const val = getVal(name);
+        return val !== "" ? parseFloat(val) : null;
+      };
+
+      const payload = {
+        parametro: getVal("parametro"),
+        unidad: getVal("unidad") || null,
+        expresion: getVal("expresion") || null,
+        minimo: getNumVal("minimo"),
+        maximo: getNumVal("maximo"),
+        tolerancia_minimo: getNumVal("tolerancia_minimo"),
+        tolerancia_maximo: getNumVal("tolerancia_maximo")
+      };
+
+      const request = fetch(`${API_URL}/${id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(payload)
+      });
+
+      requests.push(request);
+    });
+
+    try {
+      const responses = await Promise.all(requests);
+      const allOk = responses.every((res) => res.ok);
+
+      if (allOk) {
+        alert("Todos los parámetros se actualizaron correctamente");
+      } else {
+        alert("Ocurrió un error al actualizar algunos parámetros");
+      }
+    } catch (error) {
+      alert("Error de conexión con el servidor");
+    }
+  });
+</script>
+</div>
+{% endblock %}

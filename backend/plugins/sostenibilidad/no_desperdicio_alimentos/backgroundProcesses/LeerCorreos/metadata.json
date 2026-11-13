@@ -1,0 +1,25 @@
+{
+  "id": "Certificados_recepción",
+  "name": "Lector Cetificados de recepción",
+  "description": "Busca certificados de recepción y los guarda en la carpeta deseada.",
+  "category": "sostenibilidad/no_desperdicio_alimentos",
+  "version": "1.0.0",
+  "entry_point": "worker.py",
+  "enabled": false,
+  "options": [
+    {
+      "key": "carpetas_a_revisar",
+      "name": "Carpetas a revisar",
+      "description": "Carpetas de Outlook que serán revisadas",
+      "option_type": "string",
+      "multiple": true
+    },
+    {
+      "key": "carpetas_de_destino",
+      "name": "Carpetas de destino",
+      "description": "Selecciona la carpeta a la que quieres que lleguen tus pdf",
+      "option_type": "folder_path",
+      "multiple": false
+    }
+  ] 
+}

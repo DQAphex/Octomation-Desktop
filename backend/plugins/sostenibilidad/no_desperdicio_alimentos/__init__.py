@@ -1,0 +1,1 @@
+from .no_desperdicio_alimentos import router

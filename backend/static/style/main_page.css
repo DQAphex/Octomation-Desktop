@@ -1,0 +1,105 @@
+.MainLayout {
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  width: 100%;
+  height: 100%; 
+  max-height: calc(100vh - 120px);
+  overflow: hidden;
+  background: var(--color-foreground);
+  border-radius: 8px;
+}
+.welcome{
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  gap: 10px;
+}
+h1, p{
+  width: 50%;
+}
+
+.links {
+  display: flex;
+  margin:24px;
+  padding: 24px;
+  position: relative; /* Indispensable para que el absolute tome de referencia a este contenedor */
+  overflow: hidden;   /* Opcional: para recortar la mitad del círculo que sobresale */
+}
+
+.links .imgContainer {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 400px;  /* Ajusta el tamaño según tu diseño */
+  height: 400px;
+  overflow: hidden;
+  border-radius: 100%;
+}
+
+.links .imgContainer img {
+  position: relative;
+  object-fit: cover;
+  width: 100%;
+  opacity: 0.2;
+  z-index: 1;
+}
+.mainLinks{
+  position: relative;
+  border: solid var(--color-borders) 1px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  padding-left: 24px;
+  padding-right: 24px;
+}
+.mainLinks h2{
+  margin-top: 24px;
+}
+.mainLinks p{
+  width: 100%;
+}
+.mainLinks p span{
+  position: relative;
+  top: 4px;
+}
+.linkList{
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  height: 100px;
+  /* gap: 16px; */
+  grid-gap: 16px;
+  width: 100%;
+  z-index: 2;
+}
+.linkList a{
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  place-items: center;
+  background-color: white;
+  filter: drop-shadow(4px 4px 4px #e7e7e7);
+  height: 2rem;
+  height: 100%;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: .8rem;
+  box-sizing: border-box;
+  text-align: center;
+}
+.linkList a span{
+  font-size: 3rem;
+  font-weight: 600;
+}
+.linkList a:hover{
+  filter: drop-shadow(0px 4px 0px var(--smu-highlight-color-2));
+}
+.linkList a *{
+  margin: 0;
+}

@@ -1,0 +1,1151 @@
+# project-snapshot
+# Generated: 2026-10-24T05:51:44.948Z
+# Root: C:\Users\diego\Desktop\capstone\Fase 2\Evidencias Proyecto\repos\Octomation-Engine-Server\plugins\plugin_generator
+
+=== dto\plugin_dto.py ===
+from datetime import datetime, timezone
+from typing import Annotated
+from pydantic import (
+  BaseModel,
+  ConfigDict,
+  EmailStr,
+  Field,
+  StringConstraints,
+  ValidationError,
+)
+
+restrictions = {
+  "espacios": "[NO USAR ESPACIOS]",
+  "version": "[0.00.000]"
+}
+
+# Tipo reutilizable para cadenas estrictas sin espacios en blanco
+NoSpacesStr = Annotated[
+  str,
+  StringConstraints(
+    pattern=r"^\S+$",
+    strip_whitespace=True,
+  ),
+]
+
+
+class PluginBaseDTO(BaseModel):
+  model_config = ConfigDict(
+    extra="forbid",
+    populate_by_name=True,
+    json_schema_extra={
+      "example": {
+        "plugin_name": "GeneradorDePlugins",
+        "plugin_category": "General",
+        "version": "0.0.1",
+        "created_at": "2026-09-08T10:30:00Z",
+        "author": "Diego Quioza",
+        "email": "dquioza@smu.cl",
+      }
+    },
+  )
+
+  plugin_name: NoSpacesStr = Field(
+    ...,
+    min_length=5,
+    max_length=50,
+    description=f"{restrictions['espacios']} Nombre del plugin, nombre de carpeta con la que se guardará el proyecto",
+    examples=["GeneradorDePlugins"],
+  )
+
+  plugin_category: NoSpacesStr | None = Field(
+    default=None,
+    description="Categoría del plugin (opcional, sin espacios si se especifica)",
+    examples=["Medioambiente"],
+  )
+
+  version: str = Field(
+    ...,
+    pattern=r"^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$",
+    description=f"{restrictions['espacios']}{restrictions['version']} Versión del plugin en formato MAJOR.MINOR.PATCH",
+    examples=["0.0.1"],
+  )
+
+  created_at: datetime = Field(
+    default_factory=lambda: datetime.now(timezone.utc),
+    description="Fecha y hora de creación del plugin en formato ISO 8601",
+  )
+
+  author: str = Field(
+    ...,
+    min_length=2,
+    max_length=100,
+    description="Nombre completo del autor",
+    examples=["Diego Quioza"],
+  )
+
+  email: EmailStr = Field(
+    ...,
+    description="Correo electrónico válido del autor",
+    examples=["dquioza@smu.cl"],
+  )
+
+=== metadata.json ===
+{
+  "plugin_name":"Generador de Plugins",
+  "plugin_category":"General",
+  "version":"0.0.1",
+  "created_at":"08-09-2026",
+  "author": "Diego Quioza",
+  "email": "dquioza@smu.cl"
+}
+
+=== pages\main.html ===
+{% extends "base.html" %}
+{% block extra_css %}
+  <link rel="stylesheet" href="{{ url_for('static_medioambiente_riles', path='styles/main.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static_medioambiente_riles', path='styles/data.css') }}">
+{% endblock %}
+{% block content %}
+<div class="riles-container">
+  <div class="title-filter">
+    <div class="title">
+      <h2>Gestión de Riles</h2>
+    </div>
+    <div class="list nav-bar">
+      <a href="/medioambiente/riles/" class="nav">
+        <span class="material-symbols-outlined mi-icono">home</span>
+        Inicio
+      </a>
+      <a href="/medioambiente/riles/inbox" class="nav">
+        <span class="material-symbols-outlined mi-icono">inbox</span>
+        Inbox
+      </a>
+      <a href="/medioambiente/riles/upload" class="nav">
+        <span class="material-symbols-outlined mi-icono">search</span>
+        Subir
+      </a>
+      <a href="/medioambiente/riles/send-mails" class="nav">
+        <span class="material-symbols-outlined mi-icono">send</span>
+        Enviar Correos
+      </a>
+      <a href="/medioambiente/riles/store-list" class="nav">
+        <span class="material-symbols-outlined mi-icono">storefront</span>
+        Lista de locales
+      </a>
+      <a href="/medioambiente/riles/parameter-limits" class="nav">
+        <span class="material-symbols-outlined mi-icono">widget_width</span>
+        Parámetros
+      </a>
+      <a href="/medioambiente/riles/data" class="nav">
+        <span class="material-symbols-outlined mi-icono">database</span>
+        Editar Datos de aplicación
+      </a>
+    </div>
+  </div>
+  <div class="content-display">
+    <div class="content-header">
+      <h2>Gestión de Datos</h2>
+      <p>Desde esta sección puedes gestionar los datos de la aplicación, incluyendo análisis de riles, mails de locales y la cola de mails.</p>
+      <p>Para editar los datos de alguna tabla debes <strong>Descargar</strong> los datos primero.</p>
+      <p>Luego editas los datos en excel y haces click en <strong>Cargar Datos</strong></p>
+      <p>Recuerda <strong>Descargar Datos</strong> antes de <strong>Eliminar Datos</strong> para tener un respaldo de los datos.</p>
+    </div>
+    <div class="table-list">
+      <!-- CARD 1: ANÁLISIS DE RILES -->  
+      <div class="table-card">
+        <span class="material-symbols-outlined mi-icono table-icon">analytics</span>
+        <h2>Análisis de Riles</h2>
+        
+        <div class="table-info">
+          <div class="table-info-total-rows">
+            <p>Total de filas: {{ counts.analisis_agua }}</p>
+          </div>
+          <p class="table-info-description">
+            Tabla con todos los registros de los análisis de riles y sus parámetros medidos
+          </p>
+        </div>
+
+        <!-- 1. DESCARGAR DATOS -->
+        <a href="/medioambiente/riles/api/v1/export-pdf-data" class="nav import-form">
+          <span class="material-symbols-outlined mi-icono">download</span>
+          <span>Descargar Datos</span>
+        </a>
+
+        <!-- 2. CARGAR DATOS (vía fetch) -->
+        <label for="upload-pdf-file-input" class="nav import-form import-label" style="cursor: pointer;">
+          <span class="material-symbols-outlined mi-icono">upload_file</span>
+          <span>Cargar Datos</span>
+          <input 
+            type="file" 
+            id="upload-pdf-file-input" 
+            name="file" 
+            accept=".xlsx, .xls, .csv" 
+            onchange="handleFileUpload(this, '/medioambiente/riles/api/v1/import-pdf-data')" 
+            style="display: none;"
+          >
+        </label>
+
+        <!-- 3. ELIMINAR DATOS -->
+        <button type="button" class="nav btn-delete" onclick="handleDeleteAllData('/medioambiente/riles/api/v1/delete-pdf-data')">
+          <span class="material-symbols-outlined mi-icono">delete</span>
+          <span>Eliminar Datos</span>
+        </button>
+      </div>
+
+      <!-- CARD 2: MAILS DE LOCALES -->
+      <div class="table-card">
+        <span class="material-symbols-outlined mi-icono table-icon">email</span>
+        <h2>Mails de Locales</h2>
+        
+        <div class="table-info">
+          <div class="table-info-total-rows">
+            <p>Total de filas: {{ counts.local_mail }}</p>
+          </div>
+          <p class="table-info-description">
+            Tabla con todos los mails de locales, tanto de sanitaria como del local.
+          </p>
+        </div>
+
+        <!-- 1. DESCARGAR DATOS -->
+        <a href="/medioambiente/riles/mail/export-csv" class="nav import-form">
+          <span class="material-symbols-outlined mi-icono">download</span>
+          <span>Descargar Datos</span>
+        </a>
+
+        <!-- 2. CARGAR DATOS (vía fetch) -->
+        <label for="upload-mail-file-input" class="nav import-form import-label" style="cursor: pointer;">
+          <span class="material-symbols-outlined mi-icono">upload_file</span>
+          <span>Cargar Datos</span>
+          <input 
+            type="file" 
+            id="upload-mail-file-input" 
+            name="file" 
+            accept=".xlsx, .xls, .csv" 
+            onchange="handleFileUpload(this, '/medioambiente/riles/mail/bulk-upload')" 
+            style="display: none;"
+          >
+        </label>
+
+        <!-- 3. ELIMINAR DATOS -->
+        <button type="button" class="nav btn-delete" onclick="handleDeleteAllData('/medioambiente/riles/mail/delete-all')">
+          <span class="material-symbols-outlined mi-icono">delete</span>
+          <span>Eliminar Datos</span>
+        </button>
+      </div>
+
+      <!-- CARD 3: COLA DE MAILS -->
+      <div class="table-card">
+        <span class="material-symbols-outlined mi-icono table-icon">outbox</span>
+        <h2>Cola de Mails</h2>
+        
+        <div class="table-info">
+          <div class="table-info-total-rows">
+            <p>Total de filas: {{ counts.mailing }}</p>
+          </div>
+          <p class="table-info-description">
+            Estado de envío de mails a locales y sanitaria, Enviado y Pendiente.
+          </p>
+        </div>
+
+        <!-- 1. DESCARGAR DATOS -->
+        <a href="/medioambiente/riles/api/v1/export-mailing-queue_csv" class="nav import-form">
+          <span class="material-symbols-outlined mi-icono">download</span>
+          <span>Descargar Datos</span>
+        </a>
+
+        <!-- 2. CARGAR DATOS (vía fetch a la ruta de mailing aislada) -->
+        <label for="upload-mailing-file-input" class="nav import-form import-label" style="cursor: pointer;">
+          <span class="material-symbols-outlined mi-icono">upload_file</span>
+          <span>Cargar Datos</span>
+          <input 
+            type="file" 
+            id="upload-mailing-file-input" 
+            name="file" 
+            accept=".xlsx, .xls, .csv" 
+            onchange="handleFileUpload(this, '/medioambiente/riles/api/v1/insert-mailing-queue')" 
+            style="display: none;"
+          >
+        </label>
+
+        <!-- 3. ELIMINAR DATOS -->
+        <button type="button" class="nav btn-delete" onclick="handleDeleteAllData('/medioambiente/riles/api/v1/delete-mailing-queue')">
+          <span class="material-symbols-outlined mi-icono">delete</span>
+          <span>Eliminar Datos</span>
+        </button>
+      </div>
+    </div>
+  </div>
+  
+  
+  <script>
+    /**
+     * Manejador genérico para la subida de archivos mediante POST usando fetch / FormData
+     * @param {HTMLInputElement} input - Elemento HTML de tipo file que disparó el evento
+     * @param {string} apiEndpoint - URL del endpoint en FastAPI
+     */
+    async function handleFileUpload(input, apiEndpoint) {
+      const file = input.files[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        document.body.style.cursor = 'wait';
+
+        const response = await fetch(apiEndpoint, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (response.ok || response.status === 201) {
+          const result = await response.json();
+          alert(`✅ ${result.message || 'Archivo procesado con éxito.'}`);
+          window.location.reload();
+        } else {
+          const errorData = await response.json();
+          alert(`❌ Error al procesar el archivo: ${errorData.detail || 'Error en el servidor'}`);
+        }
+      } catch (error) {
+        console.error("Error en la petición POST de subida:", error);
+        alert("❌ Ocurrió un error de red al intentar subir el archivo.");
+      } finally {
+        document.body.style.cursor = 'default';
+        input.value = '';
+      }
+    }
+
+    /**
+     * Manejador genérico para la eliminación de datos mediante DELETE
+     * @param {string} apiEndpoint - URL del endpoint en FastAPI
+     */
+    async function handleDeleteAllData(apiEndpoint) {
+      const confirmDelete = confirm("⚠️ ¿Estás seguro de que deseas eliminar TODOS los datos de esta tabla? Esta acción no se puede deshacer.");
+      if (!confirmDelete) return;
+
+      try {
+        const response = await fetch(apiEndpoint, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          alert("✅ Datos eliminados correctamente.");
+          window.location.reload();
+        } else {
+          const errorData = await response.json();
+          alert(`❌ Error al eliminar los datos: ${errorData.detail || 'Error desconocido'}`);
+        }
+      } catch (error) {
+        console.error("Error en la petición DELETE:", error);
+        alert("❌ Ocurrió un error de red al intentar eliminar los datos.");
+      }
+    }
+  </script>
+</div>
+{% endblock %}
+
+=== plugin_generator.py ===
+from fastapi import APIRouter, Request, HTTPException, status
+from fastapi.templating import Jinja2Templates
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
+from pathlib import Path
+from plugins.generic.snapshot import mapear_directorio
+from .dto.plugin_dto import PluginBaseDTO
+
+# Importar Servicio de Creación de plugins
+from .services.plugin_service import PluginService
+
+# Rutas principales del plugin
+from .plugin_generator_config import SERVICES_DIR,PAGES_DIR
+
+
+# Definimos el router
+router = APIRouter(
+  prefix="/plugin_generator",
+  tags=["Plugin Generator"]
+)
+templates = Jinja2Templates(directory=str(PAGES_DIR))
+
+@router.get("/")
+async def plugin_generator_page(request:Request):
+  """
+    Devuelve la página principal para crear plugins
+  """
+  return templates.TemplateResponse(
+    request=request,
+    name="main.html"
+  )
+
+@router.post("/", status_code=status.HTTP_201_CREATED)
+async def create_plugin(payload: PluginBaseDTO):
+  """
+  Procesa la creación de un nuevo plugin.
+  Validación automática de la carga útil vía Pydantic (PluginBaseDTO) y 
+  aprovisionamiento de la estructura de archivos en disco.
+  """
+  service = PluginService(metadata=payload)
+
+  # 1. Validación de conflicto previa a la escritura en el sistema de archivos
+  if service.validate_plugin_exists():
+    raise HTTPException(
+      status_code=status.HTTP_409_CONFLICT,
+      detail={
+        "code": "PLUGIN_ALREADY_EXISTS",
+        "message": f"El plugin '{payload.plugin_name}' ya existe en el directorio especificado.",
+        "path": str(service.plugin_path)
+      }
+    )
+
+  # 2. Orquestación y construcción del directorio/archivos en hilo secundario (no bloqueante)
+  try:
+    created_path: Path = await service.build_plugin_structure_async()
+
+  except Exception as err:
+    import traceback
+
+    traceback.print_exc()
+
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail={
+            "code": "PLUGIN_CREATION_FAILED",
+            "message": "Ocurrió un error inesperado al generar la estructura del plugin.",
+            "details": str(err)
+        }
+    )
+
+  # except FileNotFoundError as fnf_err:
+  #   raise HTTPException(
+  #     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+  #     detail={
+  #       "code": "TEMPLATE_NOT_FOUND",
+  #       "message": "Error interno: Faltan archivos de plantilla para la generación del plugin.",
+  #       "details": str(fnf_err)
+  #     }
+  #   )
+  # except PermissionError as perm_err:
+  #   raise HTTPException(
+  #     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+  #     detail={
+  #       "code": "FS_PERMISSION_DENIED",
+  #       "message": "Permisos insuficientes en el sistema de archivos para escribir la carpeta.",
+  #       "details": str(perm_err)
+  #     }
+  #   )
+  # except Exception as err:
+  #   raise HTTPException(
+  #     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+  #     detail={
+  #       "code": "PLUGIN_CREATION_FAILED",
+  #       "message": "Ocurrió un error inesperado al generar la estructura del plugin.",
+  #       "details": str(err)
+  #     }
+  #   )
+
+  # # 3. Respuesta estándar de éxito con metadatos del plugin creado
+  # return JSONResponse(
+  #   status_code=status.HTTP_201_CREATED,
+  #   content={
+  #     "status": "success",
+  #     "message": "Plugin y estructura de archivos creados exitosamente.",
+  #     "data": {
+  #       "plugin_path": str(created_path),
+  #       "metadata": jsonable_encoder(payload)
+  #     }
+  #   }
+  # )
+
+=== plugin_generator_config.py ===
+from pathlib import Path
+
+# Metadata del plugin
+PLUGIN_NAME = "{plugin_name}"
+PLUGIN_VERSION = "{version}"
+
+# Ruta raíz absoluta del plugin en tiempo de ejecución
+BASE_DIR = Path(__file__).resolve().parent
+
+# Estructura interna de directorios
+DATA_DIR = BASE_DIR / "data"
+PAGES_DIR = BASE_DIR / "pages"
+SERVICES_DIR = BASE_DIR / "services"
+STATIC_DIR = BASE_DIR / "static"
+BACKGROUND_PROCESSES_DIR = BASE_DIR / "backgroundProcesses"
+
+=== services\plugin_service.py ===
+import asyncio
+import datetime
+from pathlib import Path
+from typing import List, Optional
+
+from paths import PLUGINS_DIR
+from ..dto.plugin_dto import PluginBaseDTO
+
+
+class PluginService:
+
+  def __init__(self, metadata: PluginBaseDTO) -> None:
+    self.plugin_dir: Path = Path(PLUGINS_DIR).resolve()
+    self.metadata: PluginBaseDTO = metadata
+    self.templates_dir: Path = (Path(__file__).parent / "templates").resolve()
+
+    print("=" * 60)
+    print("PLUGIN DIR:", self.plugin_dir)
+    print("TEMPLATES DIR:", self.templates_dir)
+    print("TEMPLATES EXISTS:", self.templates_dir.exists())
+    print("=" * 60)
+  # ---------------------------------------------------------------------------
+  # Propiedades de Normalización de Nombres y Rutas
+  # ---------------------------------------------------------------------------
+
+  @property
+  def raw_category(self) -> str:
+    """Soporta tanto 'plugin_category' como 'category' en el DTO."""
+    cat = getattr(self.metadata, "plugin_category", None) or getattr(self.metadata, "category", None)
+    return cat.strip() if cat else ""
+
+  @property
+  def category_clean(self) -> str:
+    """Formatea la categoría a snake_case."""
+    return self.raw_category.lower().replace(" ", "_").replace("-", "_")
+
+  @property
+  def plugin_name_clean(self) -> str:
+    """Formatea el nombre del plugin a snake_case."""
+    return self.metadata.plugin_name.strip().lower().replace(" ", "_").replace("-", "_")
+
+  @property
+  def category_path(self) -> Optional[Path]:
+    """Retorna la ruta física de la categoría si está configurada."""
+    if self.category_clean:
+      return self.plugin_dir / self.category_clean
+    return None
+
+  @property
+  def plugin_path(self) -> Path:
+    """Resuelve la ruta final del plugin en el árbol de directorios."""
+    if self.category_path:
+      return self.category_path / self.plugin_name_clean
+    return self.plugin_dir / self.plugin_name_clean
+
+  # ---------------------------------------------------------------------------
+  # Validaciones
+  # ---------------------------------------------------------------------------
+
+  def validate_category(self) -> bool:
+    if self.category_path is None:
+      return True
+    return self.category_path.is_dir()
+
+  def validate_plugin_exists(self) -> bool:
+    return self.plugin_path.is_dir()
+
+  # ---------------------------------------------------------------------------
+  # Creación de Directorios
+  # ---------------------------------------------------------------------------
+
+  def create_category_folder(self) -> Optional[Path]:
+    if self.category_path:
+      self.category_path.mkdir(parents=True, exist_ok=True)
+      return self.category_path
+    return None
+
+  def create_plugin_folder(self) -> Path:
+    self.plugin_path.mkdir(parents=True, exist_ok=True)
+    return self.plugin_path
+
+  def create_root_folder(self) -> Path:
+    self.plugin_path.mkdir(parents=True, exist_ok=True)
+    return self.plugin_path
+
+  def create_data_folder(self) -> Path:
+    folder = self.plugin_path / "data"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+  def create_pages_folder(self) -> Path:
+    folder = self.plugin_path / "pages"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+  def create_services_folder(self) -> Path:
+    folder = self.plugin_path / "services"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+  def create_static_folder(self) -> Path:
+    folder = self.plugin_path / "static"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+  def create_background_processes_folder(self) -> Path:
+    folder = self.plugin_path / "backgroundProcesses"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+  def create_dto_folder(self) -> Path:
+    folder = self.plugin_path / "dto"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+  # ---------------------------------------------------------------------------
+  # Creación de Archivos Basados en Plantillas
+  # ---------------------------------------------------------------------------
+
+  def _read_template(self, template_name: str) -> str:
+    template_file = self.templates_dir / template_name
+
+    print("BUSCANDO TEMPLATE:", template_file)
+    print("EXISTE:", template_file.exists())
+
+    if not template_file.exists() or not template_file.is_file():
+        raise FileNotFoundError(
+            f"La plantilla especificada no fue encontrada: {template_file}"
+        )
+
+    return template_file.read_text(encoding="utf-8")
+
+  def create_metadata_json(self) -> Path:
+
+    target_file = self.plugin_path / "metadata.json"
+    template_file = self.templates_dir / "metadata.json.template"
+
+    if template_file.exists():
+        content = template_file.read_text(encoding="utf-8")
+
+        created_at_val = (
+            self.metadata.created_at.isoformat()
+            if isinstance(self.metadata.created_at, datetime.datetime)
+            else str(self.metadata.created_at)
+        )
+
+        try:
+          rendered_content = content.format(
+            plugin_name=self.metadata.plugin_name,
+            plugin_category=self.raw_category,
+            version=self.metadata.version,
+            author=self.metadata.author,
+            email=self.metadata.email,
+            created_at=created_at_val
+          )
+
+        except Exception as e:
+          print("=" * 70)
+          print("❌ ERROR AL HACER FORMAT")
+          print("TIPO:", type(e).__name__)
+          print("MENSAJE:", repr(e))
+          print("TEMPLATE RAW:")
+          print(repr(content))
+          print("=" * 70)
+          raise
+
+        print("    [7.8] Template renderizado")
+
+    else:
+        print("    [7.5] Template NO existe")
+        print("    [7.6] Intentando model_dump_json()")
+
+        rendered_content = self.metadata.model_dump_json(indent=2)
+
+        print("    [7.7] model_dump_json OK")
+
+    print("    [7.9] Escribiendo metadata.json")
+
+    target_file.write_text(
+        rendered_content,
+        encoding="utf-8"
+    )
+
+    print("    [7.10] metadata.json creado")
+
+    return target_file
+
+  def create_init_file(self) -> Path:
+    plugin_name_lower = self.plugin_name_clean
+    plugin_name_pascal = "".join(
+        word.capitalize()
+        for word in plugin_name_lower.split("_")
+    )
+
+    target_file = self.plugin_path / "__init__.py"
+
+    content = self._read_template("__init__.py.template")
+
+    rendered_content = content.format(
+        plugin_name_lower=plugin_name_lower,
+        plugin_name_pascal=plugin_name_pascal
+    )
+
+    target_file.write_text(
+        rendered_content,
+        encoding="utf-8"
+    )
+
+    return target_file
+
+  def create_main_python_file(self) -> Path:
+    raw_name = self.metadata.plugin_name.strip()
+    plugin_name_lower = self.plugin_name_clean
+    plugin_name_pascal = "".join(word.capitalize() for word in plugin_name_lower.split("_"))
+    plugin_name_title = raw_name.replace("_", " ").replace("-", " ").title()
+
+    filename = f"{plugin_name_lower}.py"
+    target_file = self.plugin_path / filename
+    content = self._read_template("plugin_main.py.template")
+
+    rendered_content = content.format(
+      plugin_name_lower=plugin_name_lower,
+      plugin_name_pascal=plugin_name_pascal,
+      plugin_name_title=plugin_name_title,
+      version=self.metadata.version,
+      author=self.metadata.author
+    )
+
+    target_file.write_text(rendered_content, encoding="utf-8")
+    return target_file
+
+  def create_config_python_file(self) -> Path:
+    raw_name = self.metadata.plugin_name.strip()
+    plugin_name_lower = self.plugin_name_clean
+
+    filename = f"{plugin_name_lower}_config.py"
+    target_file = self.plugin_path / filename
+    content = self._read_template("plugin_config.py.template")
+
+    rendered_content = content.format(
+      plugin_name=raw_name,
+      version=self.metadata.version
+    )
+    target_file.write_text(rendered_content, encoding="utf-8")
+    return target_file
+
+  def create_pages_html_file(self) -> Path:
+    raw_name = self.metadata.plugin_name.strip()
+    plugin_name_lower = self.plugin_name_clean
+    plugin_name_title = raw_name.replace("_", " ").replace("-", " ").title()
+
+    category_lower = self.category_clean
+
+    if category_lower:
+      name_namespace = f"{category_lower}_{plugin_name_lower}"
+      route_prefix = f"/{category_lower}/{plugin_name_lower}"
+    else:
+      name_namespace = plugin_name_lower
+      route_prefix = f"/{plugin_name_lower}"
+
+    static_mount = f"static_{name_namespace}"
+
+    pages_dir = self.plugin_path / "pages"
+    pages_dir.mkdir(parents=True, exist_ok=True)
+
+    target_file = pages_dir / "main.html"
+    content = self._read_template("main.html.template")
+
+    rendered_content = (
+      content.replace("__PLUGIN_NAME_LOWER__", plugin_name_lower)
+      .replace("__PLUGIN_TITLE__", plugin_name_title)
+      .replace("__ROUTE_PREFIX__", route_prefix)
+      .replace("__STATIC_MOUNT__", static_mount)
+    )
+
+    target_file.write_text(rendered_content, encoding="utf-8")
+    return target_file
+
+  def create_static_css_file(self) -> Path:
+    plugin_name_lower = self.plugin_name_clean
+
+    styles_dir = self.plugin_path / "static" / "styles"
+    styles_dir.mkdir(parents=True, exist_ok=True)
+
+    target_file = styles_dir / "main.css"
+    content = self._read_template("main.css.template")
+
+    rendered_content = content.replace("__PLUGIN_NAME_LOWER__", plugin_name_lower)
+
+    target_file.write_text(rendered_content, encoding="utf-8")
+    return target_file
+
+  def create_dto_python_file(self) -> Path:
+    plugin_name_lower = self.plugin_name_clean
+    plugin_name_pascal = "".join(
+        word.capitalize()
+        for word in plugin_name_lower.split("_")
+    )
+
+    dto_dir = self.plugin_path / "dto"
+    dto_dir.mkdir(parents=True, exist_ok=True)
+
+    target_file = dto_dir / f"{plugin_name_lower}_dto.py"
+
+    content = self._read_template("plugin_dto.py.template")
+
+    rendered_content = content.format(
+        plugin_name_lower=plugin_name_lower,
+        plugin_name_pascal=plugin_name_pascal
+    )
+
+    target_file.write_text(
+        rendered_content,
+        encoding="utf-8"
+    )
+
+    return target_file
+
+  def create_category_files(self) -> List[Path]:
+    category_lower = self.category_clean
+    if not category_lower:
+      return []
+
+    category_title = self.raw_category.replace("_", " ").replace("-", " ").title()
+    plugin_name_lower = self.plugin_name_clean
+    plugin_title = self.metadata.plugin_name.strip().replace("_", " ").replace("-", " ").title()
+
+    category_dir = self.plugin_dir / category_lower
+    category_dir.mkdir(parents=True, exist_ok=True)
+
+    generated_files: List[Path] = []
+
+    # 1. Archivo __init__.py de categoría
+    init_file = category_dir / "__init__.py"
+    if not init_file.exists():
+      init_content = f"from .{category_lower} import router\n"
+      init_file.write_text(init_content, encoding="utf-8")
+      generated_files.append(init_file)
+
+    # 2. Router principal de la categoría
+    category_file = category_dir / f"{category_lower}.py"
+
+    if not category_file.exists():
+      template_content = self._read_template("category_router.py.template")
+      rendered_content = (
+        template_content.replace("__CATEGORY_LOWER__", category_lower)
+        .replace("__CATEGORY_TITLE__", category_title)
+        .replace("__PLUGIN_NAME_LOWER__", plugin_name_lower)
+        .replace("__PLUGIN_TITLE__", plugin_title)
+      )
+      category_file.write_text(rendered_content, encoding="utf-8")
+    else:
+      content = category_file.read_text(encoding="utf-8")
+      import_line = f"from .{plugin_name_lower} import router as {plugin_name_lower}"
+      include_line = f"router.include_router({plugin_name_lower})"
+
+      modified = False
+      if import_line not in content:
+        content = f"{import_line}\n" + content
+        modified = True
+
+      if include_line not in content:
+        content += f"\n{include_line}\n"
+        modified = True
+
+      if modified:
+        category_file.write_text(content, encoding="utf-8")
+
+    generated_files.append(category_file)
+    return generated_files
+
+  def create_dto_python_file(self) -> Path:
+    print("    [3.1] Preparando nombres")
+
+    plugin_name_lower = self.plugin_name_clean
+
+    plugin_name_pascal = "".join(
+        word.capitalize()
+        for word in plugin_name_lower.split("_")
+    )
+
+    print(f"    plugin_name_lower: {plugin_name_lower}")
+    print(f"    plugin_name_pascal: {plugin_name_pascal}")
+
+    dto_dir = self.plugin_path / "dto"
+    dto_dir.mkdir(parents=True, exist_ok=True)
+
+    print(f"    [3.2] DTO directory: {dto_dir}")
+
+    target_file = dto_dir / f"{plugin_name_lower}_dto.py"
+
+    print(f"    [3.3] Target: {target_file}")
+
+    content = self._read_template("plugin_dto.py.template")
+
+    print("    [3.4] Template leído")
+    print(repr(content))
+
+    rendered_content = content.format(
+        plugin_name_lower=plugin_name_lower,
+        plugin_name_pascal=plugin_name_pascal
+    )
+
+    print("    [3.5] Template renderizado")
+
+    target_file.write_text(
+        rendered_content,
+        encoding="utf-8"
+    )
+
+    print("    [3.6] DTO creado")
+
+    return target_file
+
+  def create_service_python_file(self) -> Path:
+    plugin_name_lower = self.plugin_name_clean
+
+    plugin_name_pascal = "".join(
+        word.capitalize()
+        for word in plugin_name_lower.split("_")
+    )
+
+    services_dir = self.plugin_path / "services"
+    services_dir.mkdir(parents=True, exist_ok=True)
+
+    target_file = services_dir / f"{plugin_name_lower}_service.py"
+
+    content = self._read_template("plugin_service.py.template")
+
+    rendered_content = content.format(
+        plugin_name_lower=plugin_name_lower,
+        plugin_name_pascal=plugin_name_pascal
+    )
+
+    target_file.write_text(
+        rendered_content,
+        encoding="utf-8"
+    )
+
+    return target_file
+
+  # ---------------------------------------------------------------------------
+  # Orquestador Principal
+  # ---------------------------------------------------------------------------
+
+  def build_plugin_structure(self) -> Path:
+    # -----------------------------------------------------------------------
+    # 1. Directorio raíz del plugin
+    # -----------------------------------------------------------------------
+    self.create_root_folder()
+
+    # -----------------------------------------------------------------------
+    # 2. Estructura de directorios
+    # -----------------------------------------------------------------------
+    self.create_data_folder()
+    self.create_dto_folder()
+    self.create_pages_folder()
+    self.create_services_folder()
+    self.create_static_folder()
+    self.create_background_processes_folder()
+
+    # -----------------------------------------------------------------------
+    # 3. Metadata
+    # -----------------------------------------------------------------------
+    print("[1] Metadata")
+    self.create_metadata_json()
+
+    # -----------------------------------------------------------------------
+    # 4. Código base del plugin
+    # -----------------------------------------------------------------------
+    print("[2] create_dto_python_file")
+
+    self.create_dto_python_file()
+    print("[3] create_service_python_file")
+    self.create_service_python_file()
+    print("[4] create_init_file")
+    self.create_init_file()
+    print("[5] create_main_python_file")
+    self.create_main_python_file()
+    print("[6] create_config_python_file")
+    self.create_config_python_file()
+
+    # -----------------------------------------------------------------------
+    # 5. Frontend
+    # -----------------------------------------------------------------------
+    print("[7] create_pages_html_file")
+    self.create_pages_html_file()
+    print("[8] create_static_css_file")
+    self.create_static_css_file()
+
+    # -----------------------------------------------------------------------
+    # 6. Router agregador de categoría
+    # -----------------------------------------------------------------------
+    print("[9] create_category_files")
+    self.create_category_files()
+
+    print("[10] create_category_files")
+    
+    return self.plugin_path
+
+  # ---------------------------------------------------------------------------
+  # Wrappers Asíncronos
+  # ---------------------------------------------------------------------------
+
+  async def create_plugin_folder_async(self) -> Path:
+    return await asyncio.to_thread(self.create_plugin_folder)
+
+  async def validate_category_async(self) -> bool:
+    return await asyncio.to_thread(self.validate_category)
+
+  async def build_plugin_structure_async(self) -> Path:
+    return await asyncio.to_thread(self.build_plugin_structure)
+
+=== services\templates\category_router.py.template ===
+from fastapi import APIRouter, Request
+from fastapi.templating import Jinja2Templates
+from paths import TEMPLATES_DIR
+from .__PLUGIN_NAME_LOWER__ import router as __PLUGIN_NAME_LOWER__
+
+router = APIRouter(
+  prefix="/__CATEGORY_LOWER__",
+  tags=["__CATEGORY_TITLE__"]
+)
+
+router.include_router(__PLUGIN_NAME_LOWER__)
+
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
+
+
+@router.get("/")
+async def inicio(request: Request):
+  datos = {
+    "titulo": "Panel de Lectura de pdf __PLUGIN_TITLE__ | __CATEGORY_TITLE__"
+  }
+  return templates.TemplateResponse(
+    request=request, 
+    name="areas/__CATEGORY_LOWER__.html", 
+    context=datos
+  )
+
+=== services\templates\main.css.template ===
+@import url('../variables.css');
+
+.__PLUGIN_NAME_LOWER__-container {
+  display: grid;
+  grid-template-columns: 1fr 3fr;
+  grid-template-rows: 1fr;
+  width: 100%;
+  height: 100%; 
+  max-height: calc(100vh - 120px);
+  overflow: hidden;
+  background: var(--color-foreground);
+  border-radius: 8px;
+  position: relative;
+}
+
+=== services\templates\main.html.template ===
+{% extends "base.html" %}
+
+{% block extra_css %}
+  <link rel="stylesheet" href="{{ url_for('__STATIC_MOUNT__', path='styles/main.css') }}">
+{% endblock %}
+
+{% block content %}
+    <div class="__PLUGIN_NAME_LOWER__-container">
+    </div>
+{% endblock %}
+
+=== services\templates\metadata.json.template ===
+{{
+  "plugin_name": "{plugin_name}",
+  "plugin_category": "{plugin_category}",
+  "version": "{version}",
+  "created_at": "{created_at}",
+  "author": "{author}",
+  "email": "{email}"
+}}
+
+=== services\templates\plugin_config.py.template ===
+# ==============================================================================
+# 1. Plantilla Corregida: plugin_config.py.template
+# ==============================================================================
+from pathlib import Path
+
+# Metadata del plugin
+PLUGIN_NAME = "{plugin_name}"
+PLUGIN_VERSION = "{version}"
+
+# Ruta raíz absoluta del plugin en tiempo de ejecución
+BASE_DIR = Path(__file__).resolve().parent
+
+# Estructura interna de directorios
+DATA_DIR = BASE_DIR / "data"
+PAGES_DIR = BASE_DIR / "pages"
+SERVICES_DIR = BASE_DIR / "services"
+STATIC_DIR = BASE_DIR / "static"
+BACKGROUND_PROCESSES_DIR = BASE_DIR / "backgroundProcesses"
+
+=== services\templates\plugin_dto.py.template ===
+from pydantic import BaseModel
+
+class {plugin_name_pascal}BaseDTO(BaseModel):
+  nombre: str
+
+=== services\templates\plugin_main.py.template ===
+from pathlib import Path
+from fastapi import APIRouter, Request, HTTPException, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
+from fastapi.templating import Jinja2Templates
+
+from .dto.{plugin_name_lower}_dto import {plugin_name_pascal}BaseDTO
+from .services.{plugin_name_lower}_service import {plugin_name_pascal}Service
+from .{plugin_name_lower}_config import PAGES_DIR, SERVICES_DIR
+from paths import STATIC_DIR, TEMPLATES_DIR
+
+# Definimos el router
+router = APIRouter(
+    prefix="/{plugin_name_lower}",
+    tags=["{plugin_name_title}"]
+)
+
+templates = Jinja2Templates(directory=[PAGES_DIR, TEMPLATES_DIR])
+
+@router.get("/")
+async def {plugin_name_lower}_page(request: Request):
+    """
+    Devuelve la página principal para el plugin {plugin_name_title}.
+    """
+    return templates.TemplateResponse(
+        request=request,
+        name="main.html"
+    )
+
+
+@router.get("/hello-world")
+async def hello_world():
+    result = {plugin_name_pascal}Service.get_hola_mundo()
+
+    return {{
+        "message": result
+    }}
+
+
+@router.post("/hello-name")
+async def hello_name(data: {plugin_name_pascal}BaseDTO):
+    result = {plugin_name_pascal}Service.post_hola_nombre(data)
+
+    return {{
+        "message": result
+    }}
+
+=== services\templates\plugin_service.py.template ===
+from ..dto.{plugin_name_lower}_dto import {plugin_name_pascal}BaseDTO
+
+
+class {plugin_name_pascal}Service:
+
+    def __init__(self, metadata: {plugin_name_pascal}BaseDTO):
+        self.metadata = metadata
+
+    @staticmethod
+    def get_hola_mundo() -> str:
+        return "Hola mundo"
+
+    @staticmethod
+    def post_hola_nombre(
+        data: {plugin_name_pascal}BaseDTO
+    ) -> str:
+        return f"Hola {{data.nombre}}"
+
+=== services\templates\__init__.py.template ===
+from .{plugin_name_lower} import router
+
+=== __init__.py ===
+from .plugin_generator import router

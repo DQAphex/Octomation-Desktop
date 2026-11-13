@@ -1,0 +1,221 @@
+@import url('../variables.css');
+
+.riles-container {
+  display: grid;
+  grid-template-columns: 2fr 6fr;
+  width: 100%;
+  height: 100%; 
+  max-height: calc(100vh - 120px);
+  overflow: hidden;
+  background: var(--color-foreground);
+  border-radius: 8px;
+}
+
+.left-bar {
+  display: grid;
+  grid-template-rows: 100px 1fr 50px;
+  gap: 10px;
+  place-items: center;
+  height: 100%;
+  max-height: 100%;
+  padding-right: 24px;
+  min-height: 0; /* OBLIGATORIO para CSS Grid */
+  overflow: hidden;
+}
+
+.pdf-viewer {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+.inputs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  border-bottom: 1px solid var(--color-borders);
+}
+
+/* Ocultar el input nativo */
+.hidden-file-input {
+  display: none;
+}
+
+/* Diseñar el botón a través del label */
+.custom-file-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background-color: var(--smu-highlight-color-2);
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: .8rem;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+  user-select: none;
+}
+.custom-file-label:hover {
+  background-color: var(--color-background);
+  color: var(--color-text);
+  border: 1px solid var(--color-borders);
+}
+.custom-file-label:active {
+  transform: scale(0.95);
+}
+.save-data {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background-color: var(--smu-highlight-color);
+  color: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: .8rem;
+  transition: background-color 0.2s ease, transform 0.1s ease;
+  user-select: none;
+  border: none;
+}
+.save-data:hover {
+  background-color: var(--color-background);
+  color: var(--color-text);
+  border: 1px solid var(--color-borders);
+}
+.save-data:active {
+  transform: scale(0.95);
+}
+/* Estados de interacción */
+
+
+/* Selector de archivos */
+.file-upload-wrapper {
+  display: inline-block;
+}
+
+/* Vista previa PDF */
+.b64 {
+  width: 100%;
+  height: 100%;
+}
+
+.b64 iframe {
+  width: 100%;
+  height: 100%;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
+
+.left-bar {
+  display: grid;
+  grid-template-rows: 100px 1fr 50px;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0; /* OBLIGATORIO para CSS Grid */
+  overflow: hidden;
+  border-right: 1px solid var(--color-borders);
+}
+
+.data {
+  display: block; /* Cambiar a block asegura que el scroll no interfiera con flexbox */
+  width: 100%;
+  height: 100%;
+  min-height: 0; 
+  overflow: hidden; 
+}
+
+.dynamic-inputs-form {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  overflow-y: auto; /* El scroll interno funciona únicamente dentro de este bloque */
+  box-sizing: border-box;
+}
+
+.dynamic-inputs-form {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  overflow-y: auto; /* El scroll interno funciona únicamente dentro de este bloque */
+  box-sizing: border-box;
+}
+/* Formulario dinámico y grupos */
+.dynamic-data-fieldset {
+  border: none;
+  padding: 16px;
+  margin-bottom: 20px;
+  background-color: var(--color-foreground);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.dynamic-data-fieldset legend {
+  font-weight: 600;
+  padding: 0 8px;
+  color: var(--color-text);
+}
+
+/* Campos de entrada */
+.field-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.field-wrapper label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-text);
+  text-transform: capitalize;
+}
+
+.field-wrapper input {
+  padding: 6px 10px;
+  border: 1px solid var(--color-borders);
+  border-radius: 4px;
+  font-size: 14px;
+  background-color: var(--color-foreground);
+  color: var(--color-text);
+  transition: border-color 0.5s ease;
+}
+
+.field-wrapper input:focus {
+  outline: none;
+  border: 1px solid var(--smu-highlight-color-2);
+}
+
+.error-message {
+  color: #dc3545;
+  font-weight: 500;
+}
+
+.navegation{
+  place-items: center;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: 1fr;
+  width: 100%;
+  gap: 16px;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid var(--color-borders);
+}
+.nav-btn-arrow{
+  height: 100%;
+  width: 100%;
+  transition: cubic-bezier(0.075, 0.82, 0.165, 1) .5s;
+  background-color: var(--color-background);
+  color: var(--color-text);
+  border-radius: 4px;
+  border: solid 1px var(--color-borders);
+}
+.nav-btn-arrow:hover{
+  background-color: var(--smu-highlight-color-2);
+  color: var(--color-foreground);
+}

@@ -1,0 +1,191 @@
+@import url('../variables.css');
+
+.sendmail-container{
+  display: grid;
+  grid-template-rows: 50px auto;
+  width: 100%;
+  height: 100%; 
+  max-height: calc(100vh - 120px);
+  overflow: hidden;
+  background: var(--color-foreground);
+  border-radius: 8px;
+  position: relative;
+  
+}
+.Automation-list{
+  display: grid;
+  grid-template-rows: 32px 64px auto;
+  gap: 8px;
+}
+.actions{
+  display: grid;
+  grid-template-rows: 1fr;
+  grid-template-columns: auto 40%;
+  width: 100%;
+}
+.massive-send-options{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+.action-button{
+  background-color: var(--color-background) ;
+}
+.riles-table-container {
+  width: 100%;
+  margin: 20px 0;
+  overflow-x: auto;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  border-radius: 8px;
+  background-color: #ffffff;
+}
+
+.riles-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px;
+  color: #374151;
+  text-align: left;
+}
+
+.riles-table thead {
+  background-color: #1f2937;
+  color: #ffffff;
+}
+
+.riles-table th {
+  padding: 12px 16px;
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  border-bottom: 2px solid #374151;
+}
+
+.riles-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  vertical-align: middle;
+}
+
+.riles-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.riles-table tbody tr:hover {
+  background-color: #f9fafb;
+}
+
+.badge {
+  display: inline-block;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 4px;
+  text-align: center;
+}
+
+.badge-success {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+.badge-danger {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.badge-warning {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+.badge-info {
+  background-color: #e0e7ff;
+  color: #3730a3;
+}
+
+.badge-gray {
+  background-color: #f3f4f6;
+  color: #4b5563;
+}
+
+.badge-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  font-weight: 700;
+}
+
+.text-center {
+  text-align: center;
+}
+
+/* ==========================================
+   BOTONES Y ACCIONES GLOBALES
+   ========================================== */
+.global-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+/* Estilo base del botón */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  background-color: var(--primary-color, #1f2937);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md, 6px);
+  cursor: pointer;
+  outline: none;
+  box-shadow: var(--shadow-sm, 0 1px 2px 0 rgba(0, 0, 0, 0.05));
+  
+  /* Transición suave para evitar tirones de rendimiento */
+  transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+              background-color 0.15s ease,
+              box-shadow 0.15s ease;
+
+  /* Aceleración por hardware (GPU) */
+  will-change: transform, background-color;
+  transform: translateZ(0);
+}
+
+/* Hover súper fluido */
+.button:hover {
+  background-color: var(--primary-hover, #111827);
+  transform: translateY(-1px) translateZ(0);
+  box-shadow: var(--shadow-md, 0 4px 6px -1px rgba(0, 0, 0, 0.1));
+}
+
+/* Estado al hacer click */
+.button:active {
+  transform: translateY(0) scale(0.98) translateZ(0);
+  box-shadow: var(--shadow-sm, 0 1px 2px 0 rgba(0, 0, 0, 0.05));
+}
+
+/* Deshabilitado */
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Iconos dentro de los botones */
+.button .mi-icono {
+  font-size: 18px;
+  line-height: 1;
+  pointer-events: none; /* Previene parpadeos de eventos de mouse */
+}

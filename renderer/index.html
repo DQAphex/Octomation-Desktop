@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Electron + FastAPI</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>🚀 Electron + FastAPI</h1>
+    <p>App conectada a servidor FastAPI local</p>
+    
+    <div class="server-controls">
+      <span id="status" class="status online">● Servidor en línea</span>
+      <span id="pid" class="pid">PID: -</span>
+      <div class="buttons">
+        <button id="btnStop" class="btn-danger">⛔ Apagar servidor</button>
+        <button id="btnRestart" class="btn-warning">🔄 Reiniciar servidor</button>
+      </div>
+    </div>
+    
+    <div class="buttons">
+      <button id="btnHealth">Comprobar /health</button>
+      <button id="btnRoot">Llamar /</button>
+      <button id="btnHola">Llamar /hola</button>
+    </div>
+    
+    <pre id="result">Pulsa un botón para probar...</pre>
+
+    <section class="plugins-section">
+      <div class="plugins-header">
+        <h2>🧩 Tienda de Plugins</h2>
+        <button id="btnLoadPlugins" class="btn-primary">🔍 Cargar plugins desde localhost:4005</button>
+      </div>
+      <p class="plugins-subtitle">Se descargarán desde http://localhost:4005/plugins y se extraerán en ./plugins/</p>
+      <div id="pluginsList" class="plugins-list"></div>
+      <pre id="pluginsResult">Aún no se han cargado plugins...</pre>
+    </section>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

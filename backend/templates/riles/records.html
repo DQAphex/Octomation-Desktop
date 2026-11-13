@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+{% block extra_css %}
+  <link rel="stylesheet" href="{{ url_for('static', path='style/riles/records.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='style/riles/sendmail.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="riles-container" id="rilesContainer">
+
+  <!-- SECCIÓN PRINCIPAL: HISTOGRAMA INTERACTIVO -->
+  <section class="riles-hero-chart">
+    <div class="riles-card">
+      <div class="riles-card-header">
+        <div class="riles-header-info">
+          <h4 class="riles-title">Evolución Histórica de Parámetros</h4>
+          <p class="riles-subtitle">Seleccione un parámetro para actualizar el análisis gráfico por fecha de muestreo.</p>
+        </div>
+        
+        <div class="riles-action-controls">
+          <!-- BOTÓN DE CAPTURA DE PANTALLA COMPLETA -->
+          <button type="button" id="btnScreenshot" class="btn-screenshot" title="Descargar captura completa del panel">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M10.5 8.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"/>
+              <path d="M2 4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2h-1.172a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 9.172 2H6.828a2 2 0 0 0-1.414.586l-.828.828A2 2 0 0 1 3.172 4H2zm.5 2a.5.5 0 1 1 0-1 .5.5 0 0 1 0 1zm9 2.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0z"/>
+            </svg>
+            <span>Capturar Completo</span>
+          </button>
+
+          <!-- SELECTOR DE PARÁMETROS -->
+          <div class="riles-selector-group">
+            <label for="parameterSelector" class="riles-selector-label">Parámetro:</label>
+            <select id="parameterSelector" class="riles-selector">
+              <option value="dbo5" selected>DBO₅ (mg/L)</option>
+              <option value="ph">pH</option>
+              <option value="solidos_suspendidos_totales">Sólidos Suspendidos Totales (mg/L)</option>
+              <option value="aceites_grasas">Aceites y Grasas (mg/L)</option>
+              <option value="nitrogeno_amoniacal">Nitrógeno Amoniacal (mg/L)</option>
+              <option value="fosforo">Fósforo (mg/L)</option>
+              <option value="sulfatos">Sulfatos (mg/L)</option>
+              <option value="sulfuros">Sulfuros (mg/L)</option>
+              <option value="solidos_sedimentables">Sólidos Sedimentables (mL/L.h)</option>
+              <option value="poder_espumogeno">Poder Espumógeno (mm)</option>
+              <option value="volumen_de_descarga_diaria">Volumen Descarga Diaria (m³)</option>
+              <option value="volumen_de_descarga_mensual">Volumen Descarga Mensual (m³)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONTENEDOR DEL GRÁFICO PRINCIPAL -->
+      <div class="chart-container-main">
+        <canvas id="mainHistogramCanvas"></canvas>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECCIÓN SECUNDARIA: TABLA COMPACTA -->
+  <section class="riles-table-section">
+    <div class="riles-card">
+      <div class="riles-table-header">
+        <h6 class="riles-table-title">Resumen Histórico de Mediciones</h6>
+        <span class="riles-badge">{{ analisis_list|length }} Registros</span>
+      </div>
+      
+      <div class="riles-table-wrapper" id="rilesTableWrapper">
+        <table class="riles-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Fecha</th>
+              <th>Lab</th>
+              <th>Monitoreo</th>
+              <th class="col-number">pH</th>
+              <th class="col-number">DBO₅</th>
+              <th class="col-number">SST</th>
+              <th class="col-number">A. Grasas</th>
+              <th class="col-number">N. Amoniacal</th>
+              <th class="col-number">Fósforo</th>
+              <th class="col-number">Sulfatos</th>
+              <th class="col-number">Sulfuros</th>
+              <th class="col-number">S. Sed.</th>
+              <th class="col-number">Vol. Día</th>
+              <th class="col-number">Vol. Mes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in analisis_list %}
+            <tr>
+              <td class="col-id">{{ item.id }}</td>
+              <td>
+                {% if item.fecha_muestreo %}
+                  {% if item.fecha_muestreo is string %}
+                    {{ item.fecha_muestreo[:10] }}
+                  {% else %}
+                    {{ item.fecha_muestreo.strftime('%Y-%m-%d') }}
+                  {% endif %}
+                {% else %}
+                  <span class="text-empty">-</span>
+                {% endif %}
+              </td>
+              <td>{{ item.laboratorio if item.laboratorio else '-' }}</td>
+              <td class="col-subtext">{{ item.tipo_monitoreo if item.tipo_monitoreo else '-' }}</td>
+              <td class="col-number">{{ "%.2f"|format(item.ph|float) if item.ph != "" and item.ph is not none else '-' }}</td>
+              <td class="col-number">{{ "%.1f"|format(item.dbo5|float) if item.dbo5 != "" and item.dbo5 is not none else '-' }}</td>
+              <td class="col-number">{{ "%.1f"|format(item.solidos_suspendidos_totales|float) if item.solidos_suspendidos_totales != "" and item.solidos_suspendidos_totales is not none else '-' }}</td>
+              <td class="col-number">{{ "%.1f"|format(item.aceites_grasas|float) if item.aceites_grasas != "" and item.aceites_grasas is not none else '-' }}</td>
+              <td class="col-number">{{ "%.2f"|format(item.nitrogeno_amoniacal|float) if item.nitrogeno_amoniacal != "" and item.nitrogeno_amoniacal is not none else '-' }}</td>
+              <td class="col-number">{{ "%.2f"|format(item.fosforo|float) if item.fosforo != "" and item.fosforo is not none else '-' }}</td>
+              <td class="col-number">{{ "%.1f"|format(item.sulfatos|float) if item.sulfatos != "" and item.sulfatos is not none else '-' }}</td>
+              <td class="col-number">{{ "%.2f"|format(item.sulfuros|float) if item.sulfuros != "" and item.sulfuros is not none else '-' }}</td>
+              <td class="col-number">{{ "%.2f"|format(item.solidos_sedimentables|float) if item.solidos_sedimentables != "" and item.solidos_sedimentables is not none else '-' }}</td>
+              <td class="col-number">{{ "%.3f"|format(item.volumen_de_descarga_diaria|float) if item.volumen_de_descarga_diaria != "" and item.volumen_de_descarga_diaria is not none else '-' }}</td>
+              <td class="col-number">{{ "%.2f"|format(item.volumen_de_descarga_mensual|float) if item.volumen_de_descarga_mensual != "" and item.volumen_de_descarga_mensual is not none else '-' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="15" class="table-empty-row">No hay registros disponibles.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const rawData = [
+      {% for item in analisis_list %}
+      {
+        id: {{ item.id }},
+        fecha_muestreo: "{% if item.fecha_muestreo %}{% if item.fecha_muestreo is string %}{{ item.fecha_muestreo[:10] }}{% else %}{{ item.fecha_muestreo.strftime('%Y-%m-%d') }}{% endif %}{% endif %}",
+        dbo5: {% if item.dbo5 != "" and item.dbo5 is not none %}{{ item.dbo5 }}{% else %}null{% endif %},
+        ph: {% if item.ph != "" and item.ph is not none %}{{ item.ph }}{% else %}null{% endif %},
+        solidos_suspendidos_totales: {% if item.solidos_suspendidos_totales != "" and item.solidos_suspendidos_totales is not none %}{{ item.solidos_suspendidos_totales }}{% else %}null{% endif %},
+        aceites_grasas: {% if item.aceites_grasas != "" and item.aceites_grasas is not none %}{{ item.aceites_grasas }}{% else %}null{% endif %},
+        nitrogeno_amoniacal: {% if item.nitrogeno_amoniacal != "" and item.nitrogeno_amoniacal is not none %}{{ item.nitrogeno_amoniacal }}{% else %}null{% endif %},
+        fosforo: {% if item.fosforo != "" and item.fosforo is not none %}{{ item.fosforo }}{% else %}null{% endif %},
+        sulfatos: {% if item.sulfatos != "" and item.sulfatos is not none %}{{ item.sulfatos }}{% else %}null{% endif %},
+        sulfuros: {% if item.sulfuros != "" and item.sulfuros is not none %}{{ item.sulfuros }}{% else %}null{% endif %},
+        solidos_sedimentables: {% if item.solidos_sedimentables != "" and item.solidos_sedimentables is not none %}{{ item.solidos_sedimentables }}{% else %}null{% endif %},
+        poder_espumogeno: {% if item.poder_espumogeno != "" and item.poder_espumogeno is not none %}{{ item.poder_espumogeno }}{% else %}null{% endif %},
+        volumen_de_descarga_diaria: {% if item.volumen_de_descarga_diaria != "" and item.volumen_de_descarga_diaria is not none %}{{ item.volumen_de_descarga_diaria }}{% else %}null{% endif %},
+        volumen_de_descarga_mensual: {% if item.volumen_de_descarga_mensual != "" and item.volumen_de_descarga_mensual is not none %}{{ item.volumen_de_descarga_mensual }}{% else %}null{% endif %}
+      }{% if not loop.last %},{% endif %}
+      {% endfor %}
+    ];
+
+    if (!rawData || rawData.length === 0) return;
+
+    const sortedData = rawData.slice().sort((a, b) => new Date(a.fecha_muestreo) - new Date(b.fecha_muestreo));
+    const labels = sortedData.map(item => item.fecha_muestreo || 'Sin Fecha');
+
+    const paramThemes = {
+      dbo5: { bg: 'rgba(43, 92, 143, 0.85)', border: '#1d3e61', unit: 'mg/L' },
+      ph: { bg: 'rgba(70, 130, 180, 0.85)', border: '#2c5270', unit: 'pH' },
+      solidos_suspendidos_totales: { bg: 'rgba(46, 139, 87, 0.85)', border: '#1e5937', unit: 'mg/L' },
+      aceites_grasas: { bg: 'rgba(217, 119, 6, 0.85)', border: '#92400e', unit: 'mg/L' },
+      nitrogeno_amoniacal: { bg: 'rgba(124, 58, 237, 0.85)', border: '#5b21b6', unit: 'mg/L' },
+      fosforo: { bg: 'rgba(219, 39, 119, 0.85)', border: '#9d174d', unit: 'mg/L' },
+      sulfatos: { bg: 'rgba(75, 85, 99, 0.85)', border: '#1f2937', unit: 'mg/L' },
+      sulfuros: { bg: 'rgba(180, 83, 9, 0.85)', border: '#78350f', unit: 'mg/L' },
+      solidos_sedimentables: { bg: 'rgba(13, 148, 136, 0.85)', border: '#115e59', unit: 'mL/L.h' },
+      poder_espumogeno: { bg: 'rgba(234, 88, 12, 0.85)', border: '#9a3412', unit: 'mm' },
+      volumen_de_descarga_diaria: { bg: 'rgba(220, 38, 38, 0.85)', border: '#991b1b', unit: 'm³' },
+      volumen_de_descarga_mensual: { bg: 'rgba(153, 27, 27, 0.85)', border: '#450a0a', unit: 'm³' }
+    };
+
+    const ctx = document.getElementById('mainHistogramCanvas').getContext('2d');
+    let histogramChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: 'DBO₅ (mg/L)',
+          data: sortedData.map(item => item.dbo5 !== null ? parseFloat(item.dbo5) : null),
+          backgroundColor: paramThemes.dbo5.bg,
+          borderColor: paramThemes.dbo5.border,
+          borderWidth: 1.5,
+          borderRadius: 4,
+          maxBarThickness: 60
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            padding: 12,
+            titleFont: { size: 14 },
+            bodyFont: { size: 13 }
+          }
+        },
+        scales: {
+          x: {
+            title: { display: true, text: 'Fecha de Muestreo', font: { weight: 'bold', size: 12 } },
+            grid: { display: false }
+          },
+          y: {
+            beginAtZero: true,
+            title: { display: true, text: 'mg/L', font: { weight: 'bold', size: 12 } },
+            grid: { color: 'rgba(0, 0, 0, 0.05)' }
+          }
+        }
+      }
+    });
+
+    const selector = document.getElementById('parameterSelector');
+    selector.addEventListener('change', function (e) {
+      const selectedKey = e.target.value;
+      const selectedOptionText = e.target.options[e.target.selectedIndex].text;
+      const theme = paramThemes[selectedKey] || { bg: 'rgba(59, 130, 246, 0.85)', border: '#1d4ed8', unit: '' };
+
+      const newValues = sortedData.map(item => {
+        const val = item[selectedKey];
+        return (val !== null && val !== undefined) ? parseFloat(val) : null;
+      });
+
+      histogramChart.data.datasets[0].label = selectedOptionText;
+      histogramChart.data.datasets[0].data = newValues;
+      histogramChart.data.datasets[0].backgroundColor = theme.bg;
+      histogramChart.data.datasets[0].borderColor = theme.border;
+
+      if (selectedKey === 'ph') {
+        histogramChart.options.scales.y.min = 0;
+        histogramChart.options.scales.y.max = 14;
+      } else {
+        delete histogramChart.options.scales.y.min;
+        delete histogramChart.options.scales.y.max;
+      }
+
+      histogramChart.options.scales.y.title.text = theme.unit;
+      histogramChart.update();
+    });
+
+    // CAPTURA SIN DESBORDAMIENTO USANDO ONCLONE
+    const btnScreenshot = document.getElementById('btnScreenshot');
+    btnScreenshot.addEventListener('click', function () {
+      const container = document.getElementById('rilesContainer');
+      
+      btnScreenshot.classList.add('loading');
+      btnScreenshot.disabled = true;
+
+      html2canvas(container, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#f9fafb',
+        onclone: function (clonedDoc) {
+          // Se modifican las propiedades exclusivamente en el DOM clonado en memoria
+          const clonedContainer = clonedDoc.getElementById('rilesContainer');
+          const clonedTableWrapper = clonedDoc.getElementById('rilesTableWrapper');
+          const clonedBtn = clonedDoc.getElementById('btnScreenshot');
+
+          if (clonedContainer) {
+            clonedContainer.style.overflow = 'visible';
+            clonedContainer.style.height = 'auto';
+            clonedContainer.style.maxHeight = 'none';
+          }
+
+          if (clonedTableWrapper) {
+            clonedTableWrapper.style.overflow = 'visible';
+            clonedTableWrapper.style.maxHeight = 'none';
+          }
+
+          if (clonedBtn) {
+            clonedBtn.style.display = 'none';
+          }
+        }
+      }).then(canvas => {
+        const image = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        const today = new Date().toISOString().split('T')[0];
+        
+        link.href = image;
+        link.download = `RILES_Reporte_Completo_${today}.png`;
+        link.click();
+      }).catch(err => {
+        console.error('Error generando la captura de pantalla completa:', err);
+      }).finally(() => {
+        btnScreenshot.classList.remove('loading');
+        btnScreenshot.disabled = false;
+      });
+    });
+
+  });
+</script>
+{% endblock %}

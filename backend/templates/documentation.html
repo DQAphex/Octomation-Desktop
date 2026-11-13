@@ -1,0 +1,198 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="docsLayout">
+  <!-- Navbar lateral izquierdo -->
+  <div class="docsNavBar">
+    <!-- Pestañas de categorías -->
+    <div class="docsTabs">
+      {% for categoria in categorias.keys() %}
+        <button 
+          class="tab-button {% if loop.first %}active{% endif %}" 
+          onclick="cambiarPestana('cat-{{ loop.index }}', this)"
+        >
+          {{ categoria }}
+        </button>
+      {% endfor %}
+    </div>
+
+    <!-- Lista de documentos filtrados por pestaña -->
+    <div class="docs-menu-container">
+      {% for categoria, documentos in categorias.items() %}
+        <ul 
+          id="cat-{{ loop.index }}" 
+          class="docs-menu tab-content {% if loop.first %}active{% endif %}"
+        >
+          {% for doc in documentos %}
+            <li>
+              <a href="#" onclick="cargarMarkdown('{{ doc.path }}'); return false;">
+                <span class="material-symbols-outlined mi-icono">markdown</span>
+                {{ doc.nombre }}
+              </a>
+            </li>
+          {% endfor %}
+        </ul>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- Contenedor del contenido Markdown -->
+  <div class="docsContent markdown-body" id="markdown-body">
+    <p>Selecciona un documento del menú lateral para comenzar.</p>
+  </div>
+</div>
+
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+
+  // Función para obtener el valor de una variable CSS aplicada al elemento HTML/body
+  function getCssVar(varName) {
+    return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+  }
+
+  // Inicializar Mermaid mapeando tus variables CSS exactas
+  function initMermaid() {
+    // Detectar si el modo oscuro está activo
+    const esOscuroSO = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const esOscuroAttr = document.documentElement.getAttribute('data-theme') === 'dark' || 
+                        document.body.classList.contains('dark');
+    const esClaroAttr = document.documentElement.getAttribute('data-theme') === 'light' || 
+                        document.body.classList.contains('light');
+    
+    const isDark = esClaroAttr ? false : (esOscuroAttr || esOscuroSO);
+
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'base',
+      themeVariables: {
+        darkMode: isDark,
+        
+        // Colores de fondo y texto base
+        background: getCssVar('--color-foreground'),
+        primaryColor: getCssVar('--color-foreground'),
+        primaryTextColor: getCssVar('--color-text'),
+        primaryBorderColor: getCssVar('--color-borders'),
+        
+        // Flechas y conectores
+        lineColor: getCssVar('--smu-highlight-color-2'),
+        textColor: getCssVar('--color-text'),
+        
+        // Diagramas de Secuencia (Actors / Cajas superiores)
+        actorBkg: getCssVar('--color-foreground'),
+        actorBorder: getCssVar('--color-text'),
+        actorTextColor: getCssVar('--color-text'),
+        actorLineColor: getCssVar('--color-borders'),
+        
+        // Mensajes y señales (Flechas e interacciones)
+        signalColor: getCssVar('--color-text'),
+        signalTextColor: getCssVar('--color-text'),
+        labelBoxBkgColor: getCssVar('--color-foreground'),
+        labelBoxBorderColor: getCssVar('--color-borders'),
+        labelTextColor: getCssVar('--color-text'),
+        loopTextColor: getCssVar('--color-text'),
+        
+        // Nodos generales (Flowchart)
+        nodeBorder: getCssVar('--color-borders'),
+        mainBkg: getCssVar('--color-foreground')
+      }
+    });
+  }
+
+  // Ejecución inicial
+  initMermaid();
+
+  // Escuchar cambios de tema en el SO en tiempo real
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', async () => {
+    initMermaid();
+    if (window.mermaid) {
+      await window.mermaid.run({ querySelector: '.mermaid' });
+    }
+  });
+
+  // Hacer disponibles las funciones globalmente
+  window.mermaid = mermaid;
+  window.initMermaid = initMermaid;
+</script>
+
+<script>
+function cambiarPestana(catId, btnElement) {
+  // Desactivar todos los botones
+  const buttons = document.querySelectorAll('.tab-button');
+  buttons.forEach(btn => btn.classList.remove('active'));
+
+  // Ocultar todas las listas de documentos
+  const contents = document.querySelectorAll('.tab-content');
+  contents.forEach(content => content.classList.remove('active'));
+
+  // Activar la pestaña y mostrar el contenido seleccionado
+  btnElement.classList.add('active');
+  document.getElementById(catId).classList.add('active');
+}
+
+async function cargarMarkdown(path) {
+  const container = document.getElementById('markdown-body');
+  container.innerHTML = "<p>Cargando...</p>";
+  
+  try {
+    const response = await fetch(`/documentacion/content/${path}`);
+    if (!response.ok) throw new Error("No se pudo cargar el documento");
+    
+    const data = await response.json();
+    container.innerHTML = data.html;
+
+    // Renderizar los diagramas de Mermaid presentes en el HTML cargado
+    if (window.mermaid) {
+      await window.mermaid.run({
+        querySelector: '.mermaid'
+      });
+    }
+  } catch (error) {
+    container.innerHTML = `<p style="color: red;">Error al cargar el documento.</p>`;
+    console.error(error);
+  }
+}
+</script>
+
+<style>
+/* Estilos para soportar la navegación por pestañas */
+.docsTabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--color-borders);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--smu-highlight-color-2) transparent;
+  scrollbar-arrow-color: aqua;
+
+}
+
+.tab-button {
+  background: transparent;
+  border: none;
+  padding: 8px 12px;
+  color: var(--color-text);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  transition: .5s cubic-bezier(0.075, 0.82, 0.165, 1);
+}
+.tab-button:hover{
+  background-color:var(--smu-highlight-color-2) ;
+}
+
+.tab-button.active {
+  border-bottom: 2px solid var(--smu-highlight-color-2);
+  font-weight: bold;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+</style>
+{% endblock %}

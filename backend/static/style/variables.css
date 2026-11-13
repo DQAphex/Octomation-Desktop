@@ -1,0 +1,157 @@
+/* ==========================================================================
+  Variables Globales y Temas (Light / Dark)
+   ========================================================================== */
+
+:root {
+  /* Fuentes e Identidad Existentes */
+  --font-title-family: "Merriweather", serif;
+  --font-body-family: "Inter", sans-serif;
+  --smu-highlight-color: #7ade9f;
+  --smu-highlight-color-foreground: #085252;
+  /* --smu-highlight-color-2: #00ecf0; */
+  --smu-highlight-color-2: #ec478c;
+  --color-background-warning:#ffc6d6;
+  --color-foreground-warning:#b10b27;
+  --color-background-gold:#fcefa6;
+  --color-foreground-gold:#93380d;
+  --color-background-pending:#dcc6ff;
+  --color-foreground-pending:#500fba;
+  --color-background-sea:#c6fffa;
+  --color-foreground-sea:#0c519c;
+  --color-borders: #cccccc;
+  --color-background: #e4e4e4;
+  --color-foreground: #f8f8f8;
+  --scrollbar-track: var(--color-foreground);
+  --scrollbar-thumb:var(--color-borders);
+  --filter-color-icon-hover: invert(34%) sepia(89%) saturate(2497%) hue-rotate(345deg) brightness(95%) contrast(97%);
+  --color-text: rgb(56, 56, 56);
+  /* Tema Light (Valores por defecto para modo claro) */
+  --code-bg: #f6f8fa;
+  --code-text: #24292e;
+  --code-shadow: rgba(0, 0, 0, 0.05);
+
+  --code-keyword: #8839EF;
+  --code-import: #22863a;
+  --code-constant: #005cc5;
+  --code-operator: #d73a49;
+  --code-punctuation: #24292e;
+  --code-function: #4279c1;
+  --code-builtin: #005cc5;
+  --code-property: #005cc5;
+  --code-class: #6f42c1;
+  --code-exception: #d73a49;
+  --code-decorator: #6f42c1;
+  --code-string: #457118;
+  --code-docstring: #6a737d;
+  --code-escape: #22863a;
+  --code-fstring-prefix: #005cc5;
+  --code-fstring-var: #e36209;
+  --code-number: #005cc5;
+  --code-comment: #6a737d;
+  --code-variable: #e36209;
+  --code-parameter: #24292e;
+  --code-self: #005cc5;
+  --code-error-text: #cb2431;
+  --code-error-bg: rgba(203, 36, 49, 0.1);
+}
+
+/* Tema Dark (Detectado automáticamente por preferencia del SO/navegador) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-background: #09090a;
+    --color-foreground: #1e1e1e;
+    --color-text: #d4d4d4;
+    --color-borders: #3d3e41;
+    --code-bg: #1c1b1f;
+    --code-text: #d4d4d4;
+    --code-shadow: rgba(0, 0, 0, 0.25);
+
+    --code-keyword: #c586c0;
+    --code-import: #4ec9b0;
+    --code-constant: #569cd6;
+    --code-operator: #d4d4d4;
+    --code-punctuation: #ffd700;
+    --code-function: #dcdcaa;
+    --code-builtin: #4ec9b0;
+    --code-property: #9cdcfe;
+    --code-class: #4ec9b0;
+    --code-exception: #f44747;
+    --code-decorator: #dcdcaa;
+    --code-string: #ce9178;
+    --code-docstring: #6a9955;
+    --code-escape: #d7ba7d;
+    --code-fstring-prefix: #569cd6;
+    --code-fstring-var: #9cdcfe;
+    --code-number: #b5cea8;
+    --code-comment: #6a9955;
+    --code-variable: #9cdcfe;
+    --code-parameter: #4fc1ff;
+    --code-self: #569cd6;
+    --code-error-text: #f44747;
+    --code-error-bg: rgba(244, 71, 71, 0.1);
+  }
+}
+
+/* Forzar Tema Dark vía atributo HTML o clase (e.g. <html data-theme="dark"> o <body class="dark">) */
+[data-theme="dark"], .dark {
+  --code-bg: #1e1e1e;
+  --code-text: #e7e7e7;
+  --code-shadow: rgba(0, 0, 0, 0.25);
+
+  --code-keyword: #c586c0;
+  --code-import: #4ec9b0;
+  --code-constant: #569cd6;
+  --code-operator: #d4d4d4;
+  --code-punctuation: #ffd700;
+  --code-function: #dcdcaa;
+  --code-builtin: #4ec9b0;
+  --code-property: #9cdcfe;
+  --code-class: #4ec9b0;
+  --code-exception: #f44747;
+  --code-decorator: #dcdcaa;
+  --code-string: #ce9178;
+  --code-docstring: #6a9955;
+  --code-escape: #d7ba7d;
+  --code-fstring-prefix: #569cd6;
+  --code-fstring-var: #9cdcfe;
+  --code-number: #b5cea8;
+  --code-comment: #6a9955;
+  --code-variable: #9cdcfe;
+  --code-parameter: #4fc1ff;
+  --code-self: #569cd6;
+  --code-error-text: #f44747;
+  --code-error-bg: rgba(244, 71, 71, 0.1);
+}
+
+/* Forzar Tema Light vía atributo HTML o clase (e.g. <html data-theme="light"> o <body class="light">) */
+[data-theme="light"], .light {
+  --code-bg: #f6f8fa;
+  --code-text: #24292e;
+  --code-shadow: rgba(0, 0, 0, 0.05);
+
+  --code-keyword: #d73a49;
+  --code-import: #22863a;
+  --code-constant: #005cc5;
+  --code-operator: #d73a49;
+  --code-punctuation: #24292e;
+  --code-function: #6f42c1;
+  --code-builtin: #005cc5;
+  --code-property: #005cc5;
+  --code-class: #6f42c1;
+  --code-exception: #d73a49;
+  --code-decorator: #6f42c1;
+  --code-string: #032f62;
+  --code-docstring: #6a737d;
+  --code-escape: #22863a;
+  --code-fstring-prefix: #005cc5;
+  --code-fstring-var: #e36209;
+  --code-number: #005cc5;
+  --code-comment: #6a737d;
+  --code-variable: #e36209;
+  --code-parameter: #24292e;
+  --code-self: #005cc5;
+  --code-error-text: #cb2431;
+  --code-error-bg: rgba(203, 36, 49, 0.1);
+}
+
+

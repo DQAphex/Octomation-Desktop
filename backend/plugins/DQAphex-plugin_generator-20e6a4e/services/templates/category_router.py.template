@@ -1,0 +1,25 @@
+from fastapi import APIRouter, Request
+from fastapi.templating import Jinja2Templates
+from paths import TEMPLATES_DIR
+from .__PLUGIN_NAME_LOWER__ import router as __PLUGIN_NAME_LOWER__
+
+router = APIRouter(
+  prefix="/__CATEGORY_LOWER__",
+  tags=["__CATEGORY_TITLE__"]
+)
+
+router.include_router(__PLUGIN_NAME_LOWER__)
+
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
+
+
+@router.get("/")
+async def inicio(request: Request):
+  datos = {
+    "titulo": "Panel de Lectura de pdf __PLUGIN_TITLE__ | __CATEGORY_TITLE__"
+  }
+  return templates.TemplateResponse(
+    request=request, 
+    name="areas/__CATEGORY_LOWER__.html", 
+    context=datos
+  )

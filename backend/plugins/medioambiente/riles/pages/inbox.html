@@ -1,0 +1,585 @@
+{% extends "base.html" %}
+{% block extra_css %}
+  <link rel="stylesheet" href="{{ url_for('static_medioambiente_riles', path='styles/style.css') }}">
+{% endblock %}
+{% block content %}
+<div class="riles-container">
+  <div class="left-bar">
+    <div class="actions-bar">
+      <button class="save-data" id="btn-save">
+        <span class="material-symbols-outlined mi-icono">check</span>
+      </button>
+
+      <button class="disable-data" id="btn-disable">
+        <span class="material-symbols-outlined mi-icono">block</span>
+      </button>
+    </div>
+    <div class="data" id="data-container">
+      <form id="dynamic-data-form" class="dynamic-inputs-form"></form>
+    </div>
+    <div class="navegation" id="navigation-container">
+      <button type="button" id="btn-prev" class="nav-btn-arrow" disabled>
+        <span class="material-symbols-outlined">west</span>
+      </button>
+      <span id="nav-counter" class="nav-counter">0 / 0</span>
+      <button type="button" id="btn-next" class="nav-btn-arrow" disabled>
+        <span class="material-symbols-outlined">east</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="pdf-viewer">
+    <div class="b64" id="b64-container"></div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const b64Container =
+      document.getElementById('b64-container');
+
+    const dynamicDataForm =
+      document.getElementById('dynamic-data-form');
+
+    const btnPrev =
+      document.getElementById('btn-prev');
+
+    const btnNext =
+      document.getElementById('btn-next');
+
+    const navCounter =
+      document.getElementById('nav-counter');
+
+    const btnSaveData =
+      document.getElementById('btn-save');
+
+    const btnDisableData =
+      document.getElementById('btn-disable');
+
+    const PAGE_SIZE = 5;
+
+    let currentIndex = 0;
+    let currentPage = 1;
+    let totalItems = 0;
+    let totalPages = 0;
+
+    let processedItems = [];
+
+    function updateView(index) {
+      if (processedItems.length === 0) {
+        return;
+      }
+
+      currentIndex = index;
+
+      const elements = b64Container.children;
+
+      Array.from(elements).forEach((el, i) => {
+        el.style.display =
+          i === currentIndex ? 'block' : 'none';
+      });
+
+      const fieldsets =
+        dynamicDataForm.querySelectorAll(
+          '.dynamic-data-fieldset'
+        );
+
+      fieldsets.forEach((fieldset, i) => {
+        fieldset.style.display =
+          i === currentIndex ? 'block' : 'none';
+      });
+
+      const globalIndex =
+        ((currentPage - 1) * PAGE_SIZE) +
+        currentIndex;
+
+      navCounter.textContent =
+        `${globalIndex + 1} / ${totalItems}`;
+
+      btnPrev.disabled =
+        currentIndex === 0 &&
+        currentPage === 1;
+
+      btnNext.disabled =
+        currentIndex === processedItems.length - 1 &&
+        currentPage === totalPages;
+    }
+
+    async function goToNext() {
+      if (currentIndex < processedItems.length - 1) {
+        updateView(currentIndex + 1);
+        return;
+      }
+
+      if (currentPage < totalPages) {
+        await loadInboxData(currentPage + 1);
+      }
+    }
+
+    async function goToPrevious() {
+      if (currentIndex > 0) {
+        updateView(currentIndex - 1);
+        return;
+      }
+
+      if (currentPage > 1) {
+        await loadInboxData(currentPage - 1);
+
+        updateView(processedItems.length - 1);
+      }
+    }
+
+    btnPrev.addEventListener('click', async () => {
+      await goToPrevious();
+    });
+
+    btnNext.addEventListener('click', async () => {
+      await goToNext();
+    });
+
+    btnSaveData.addEventListener(
+      'click',
+      async event => {
+        event.preventDefault();
+
+        if (!processedItems.length) {
+          alert(
+            'No hay registros para guardar.'
+          );
+
+          return;
+        }
+
+        const currentItem =
+          processedItems[currentIndex];
+
+        if (!currentItem) {
+          alert(
+            'No se encontró el registro actual.'
+          );
+
+          return;
+        }
+
+        const fieldset =
+          dynamicDataForm.querySelector(
+            '.dynamic-data-fieldset'
+          );
+
+        if (!fieldset) {
+          alert(
+            'No hay datos procesados para guardar.'
+          );
+
+          return;
+        }
+
+        const confirmar = confirm(
+          `¿Deseas guardar y procesar este documento?\n\n` +
+          `Documento: ${
+            currentItem.parameters?.name_archivo ||
+            `Registro #${currentItem.id_inbox}`
+          }`
+        );
+
+        if (!confirmar) {
+          return;
+        }
+
+        const inputs =
+          fieldset.querySelectorAll('input');
+
+        const updatedParams = {};
+
+        inputs.forEach(input => {
+          const key = input.id.replace(
+            `input_${currentIndex}_`,
+            ''
+          );
+
+          if (key !== 'name_archivo') {
+            updatedParams[key] =
+              input.value;
+          }
+        });
+
+        const originalParams =
+          currentItem.parameters || {};
+
+        const b64Value =
+          originalParams.base64 ||
+          originalParams.b64 ||
+          null;
+
+        const payloadData = [
+          {
+            ...updatedParams,
+            b64: b64Value
+          }
+        ];
+
+        const idFile =
+          currentItem.id_file;
+
+        if (!idFile) {
+          alert(
+            'El documento actual no tiene un ID de archivo válido.'
+          );
+
+          return;
+        }
+
+        try {
+          btnSaveData.disabled = true;
+
+          const saveResponse = await fetch(
+            '/medioambiente/riles/api/v1/save-pdf-data',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify(
+                payloadData
+              )
+            }
+          );
+
+          if (!saveResponse.ok) {
+            throw new Error(
+              `Error al guardar datos: ${
+                saveResponse.status
+              }`
+            );
+          }
+
+          const deactivateResponse =
+            await fetch(
+              '/medioambiente/riles/api/v1/deactivate-inbox-file',
+              {
+                method: 'PATCH',
+                headers: {
+                  'Content-Type': 'application/json'
+                },
+                body: JSON.stringify([
+                  idFile
+                ])
+              }
+            );
+
+          if (!deactivateResponse.ok) {
+            throw new Error(
+              `Error al inactivar documento: ${
+                deactivateResponse.status
+              }`
+            );
+          }
+
+          alert(
+            'Documento guardado y desactivado correctamente.'
+          );
+
+          await loadInboxData(
+            currentPage
+          );
+        } catch (error) {
+          console.error(
+            'Error en el proceso:',
+            error
+          );
+
+          alert(
+            `Error: ${error.message}`
+          );
+        } finally {
+          btnSaveData.disabled = false;
+        }
+      }
+    );
+
+
+    btnDisableData.addEventListener(
+      'click',
+      async event => {
+        event.preventDefault();
+
+        if (!processedItems.length) {
+          alert(
+            'No hay registros para desactivar.'
+          );
+
+          return;
+        }
+
+        const currentItem =
+          processedItems[currentIndex];
+
+        if (!currentItem?.id_correo) {
+          alert(
+            'El registro actual no tiene un ID de correo válido.'
+          );
+
+          return;
+        }
+
+        const idFile = currentItem.id_file;
+
+        const confirmar = confirm(
+          `¿Deseas desactivar el archivo actual?\n\nID Archivo: ${idFile}`
+        );
+
+        if (!confirmar) {
+          return;
+        }
+
+        try {
+          btnDisableData.disabled = true;
+
+          const response = await fetch(
+            '/riles/api/v1/deactivate-inbox-file',
+            {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify([idFile])
+            }
+          );
+
+          if (!response.ok) {
+            throw new Error(
+              `Error al desactivar el registro: ${
+                response.status
+              }`
+            );
+          }
+
+          alert(
+            'Archivo desactivado correctamente.'
+          );
+
+          await loadInboxData(currentPage);
+        } catch (error) {
+          console.error(
+            'Error al desactivar archivo:',
+            error
+          );
+
+          alert(`Error: ${error.message}`);
+        } finally {
+          btnDisableData.disabled = false;
+        }
+      }
+    );
+
+    async function loadInboxData(page = 1) {
+      b64Container.innerHTML =
+        '<p>Cargando vista previa...</p>';
+
+      dynamicDataForm.innerHTML =
+        '<p>Cargando datos del servidor...</p>';
+
+      navCounter.textContent = '0 / 0';
+
+      btnPrev.disabled = true;
+      btnNext.disabled = true;
+
+      try {
+        const response = await fetch(
+          `/medioambiente/riles/api/v1/get-inbox?page=${page}&page_size=${PAGE_SIZE}`
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `Error al obtener datos: ${
+              response.status
+            }`
+          );
+        }
+
+        const data = await response.json();
+
+        b64Container.innerHTML = '';
+        dynamicDataForm.innerHTML = '';
+
+        processedItems = data.items || [];
+        currentPage = data.page || page;
+        totalItems = data.total || 0;
+
+        totalPages =
+          Math.ceil(
+            totalItems / PAGE_SIZE
+          );
+
+        if (!processedItems.length) {
+          dynamicDataForm.innerHTML =
+            '<p>No se encontraron registros en el inbox.</p>';
+
+          navCounter.textContent =
+            `${totalItems} / ${totalItems}`;
+
+          return;
+        }
+
+        processedItems.forEach(
+          (item, pdfIndex) => {
+            const params =
+              item.parameters || {};
+
+            const b64Val =
+              params.base64 ||
+              params.b64;
+
+            if (b64Val) {
+              const srcUrl =
+                b64Val.startsWith('data:')
+                  ? b64Val
+                  : `data:application/pdf;base64,${b64Val}`;
+
+              const iframe =
+                document.createElement('iframe');
+
+              iframe.src = srcUrl;
+
+              iframe.style.display = 'none';
+              iframe.style.width = '100%';
+              iframe.style.height = '100%';
+              iframe.style.border = 'none';
+
+              b64Container.appendChild(
+                iframe
+              );
+            } else {
+              const noPdfMsg =
+                document.createElement('div');
+
+              noPdfMsg.className =
+                'no-pdf-message';
+
+              noPdfMsg.style.display =
+                'none';
+
+              noPdfMsg.innerHTML =
+                '<p>Sin vista previa de PDF</p>';
+
+              b64Container.appendChild(
+                noPdfMsg
+              );
+            }
+
+            const fieldset =
+              document.createElement(
+                'fieldset'
+              );
+
+            fieldset.className =
+              'dynamic-data-fieldset';
+
+            fieldset.style.display =
+              'none';
+
+            const legend =
+              document.createElement('legend');
+
+            legend.textContent =
+              params.name_archivo ||
+              `Registro #${
+                item.id_inbox ||
+                pdfIndex + 1
+              }`;
+
+            fieldset.appendChild(
+              legend
+            );
+
+            const {
+              base64,
+              b64,
+              ...datosLimpios
+            } = params;
+
+            Object.entries(
+              datosLimpios
+            ).forEach(([key, value]) => {
+              const fieldWrapper =
+                document.createElement(
+                  'div'
+                );
+
+              fieldWrapper.className =
+                'field-wrapper';
+
+              const inputId =
+                `input_${pdfIndex}_${key}`;
+
+              const label =
+                document.createElement(
+                  'label'
+                );
+
+              label.htmlFor = inputId;
+
+              label.textContent =
+                key.replace(
+                  /_/g,
+                  ' '
+                );
+
+              const input =
+                document.createElement(
+                  'input'
+                );
+
+              input.type = 'text';
+              input.id = inputId;
+
+              input.name =
+                `${key}_${pdfIndex}`;
+
+              input.value =
+                value ?? '';
+
+              fieldWrapper.append(
+                label,
+                input
+              );
+
+              fieldset.appendChild(
+                fieldWrapper
+              );
+            });
+
+            dynamicDataForm.appendChild(
+              fieldset
+            );
+          }
+        );
+
+        currentIndex = 0;
+
+        updateView(0);
+      } catch (error) {
+        console.error(
+          'Error al cargar datos:',
+          error
+        );
+
+        b64Container.innerHTML = '';
+
+        dynamicDataForm.innerHTML =
+          `<p class="error-message">
+            Error: ${error.message}
+          </p>`;
+
+        navCounter.textContent =
+          '0 / 0';
+
+        btnPrev.disabled = true;
+        btnNext.disabled = true;
+      }
+    }
+
+    loadInboxData();
+  });
+</script>
+{% endblock %}

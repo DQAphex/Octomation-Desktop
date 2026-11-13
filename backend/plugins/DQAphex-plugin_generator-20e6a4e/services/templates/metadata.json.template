@@ -1,0 +1,8 @@
+{{
+  "plugin_name": "{plugin_name}",
+  "plugin_category": "{plugin_category}",
+  "version": "{version}",
+  "created_at": "{created_at}",
+  "author": "{author}",
+  "email": "{email}"
+}}

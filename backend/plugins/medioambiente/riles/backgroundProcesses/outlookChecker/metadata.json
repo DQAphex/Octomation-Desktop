@@ -1,0 +1,23 @@
+{
+  "id": "outlookChecker",
+  "name": "outlookChecker",
+  "description": "Lee correos y guarda parámetros en base de datos",
+  "category": "riles",
+  "version": "1.0.0",
+  "enabled": false,
+  "schedules": [
+    {
+      "hour": 8,
+      "minute": 0
+    }
+  ],
+  "options": [
+    {
+      "key": "dias_atras_revision",
+      "name": "Días para revisar atrás",
+      "description": "Define la cantidad de días anteriores para buscar correos recibidos.",
+      "option_type": "string",
+      "multiple": false
+    }
+  ]
+}

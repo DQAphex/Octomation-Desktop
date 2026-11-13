@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+{% block extra_css %}
+  <link rel="stylesheet" href="{{ url_for('static', path='style/riles/style.css') }}">
+{% endblock %}
+{% block content %}
+<div class="riles-container">
+  <div class="left-bar">
+    <form class="inputs" id="pdf-form">
+      <div class="file-upload-wrapper">
+        <input type="file" id="custom-file-input" name="files" class="hidden-file-input" accept=".pdf" multiple required />
+        <label for="custom-file-input" class="custom-file-label">
+          <span class="material-symbols-outlined mi-icono">file_export</span>
+        </label>
+      </div>
+      <button class="save-data"><span class="material-symbols-outlined mi-icono">check</span></button>
+    </form>
+    <div class="data" id="data-container">
+      <!-- Formulario secundario dedicado a recibir los inputs generados -->
+      <form id="dynamic-data-form" class="dynamic-inputs-form"></form>
+    </div>
+    <div class="navegation" id="navigation-container">
+      <button type="button" id="btn-prev" class="nav-btn-arrow" disabled>
+        <span class="material-symbols-outlined">west</span>
+      </button>
+      <span id="nav-counter" class="nav-counter">0 / 0</span>
+      <button type="button" id="btn-next" class="nav-btn-arrow" disabled>
+        <span class="material-symbols-outlined">east</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="pdf-viewer">
+    <div class="b64" id="b64-container"></div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+  const fileInput = document.getElementById('custom-file-input');
+  const b64Container = document.getElementById('b64-container');
+  const dynamicDataForm = document.getElementById('dynamic-data-form');
+  const btnPrev = document.getElementById('btn-prev');
+  const btnNext = document.getElementById('btn-next');
+  const navCounter = document.getElementById('nav-counter');
+  const btnSaveData = document.getElementsByClassName('save-data')[0];
+
+  let currentIndex = 0;
+  let totalItems = 0;
+  let processedItems = [];
+
+  // Actualiza la vista previa, formulario, contador y estado de los botones
+  function updateView(index) {
+    if (totalItems === 0) return;
+
+    currentIndex = index;
+
+    // 1. Alternar visibilidad de la vista previa (iframe o mensaje de aviso)
+    const elements = b64Container.children;
+    Array.from(elements).forEach((el, i) => {
+      el.style.display = (i === currentIndex) ? 'block' : 'none';
+    });
+
+    // 2. Alternar visibilidad de los formularios (fieldsets)
+    const fieldsets = dynamicDataForm.querySelectorAll('.dynamic-data-fieldset');
+    fieldsets.forEach((fieldset, i) => {
+      fieldset.style.display = (i === currentIndex) ? 'block' : 'none';
+    });
+
+    // 3. Actualizar contador
+    navCounter.textContent = `${currentIndex + 1} / ${totalItems}`;
+
+    // 4. Habilitar / deshabilitar botones según la posición
+    btnPrev.disabled = (currentIndex === 0);
+    btnNext.disabled = (currentIndex === totalItems - 1);
+  }
+
+  // Event listeners para los botones de navegación
+  btnPrev.addEventListener('click', () => {
+    if (currentIndex > 0) {
+      updateView(currentIndex - 1);
+    }
+  });
+
+  btnNext.addEventListener('click', () => {
+    if (currentIndex < totalItems - 1) {
+      updateView(currentIndex + 1);
+    }
+  });
+
+  // Guardar datos en el backend
+  btnSaveData.addEventListener('click', async (event) => {
+    event.preventDefault();
+
+    const fieldsets = dynamicDataForm.querySelectorAll('.dynamic-data-fieldset');
+    if (!fieldsets.length) {
+      alert('No hay datos procesados para guardar.');
+      return;
+    }
+
+    // Estructurar el JSON recopilando la información editada de cada documento
+    const payload = Array.from(fieldsets).map((fieldset, pdfIndex) => {
+      const inputs = fieldset.querySelectorAll('input');
+      const updatedParams = {};
+
+      inputs.forEach(input => {
+        const key = input.id.replace(`input_${pdfIndex}_`, '');
+        if (key !== "name_archivo") {
+          updatedParams[key] = input.value;
+        }
+      });
+
+      // Preservar la clave b64 desde el ítem procesado original
+      const originalItem = processedItems[pdfIndex] || {};
+      const b64Value = originalItem.base64 || originalItem.b64 || null;
+
+      return {
+        ...updatedParams,
+        b64: b64Value
+      };
+    });
+
+    try {
+      btnSaveData.disabled = true;
+
+      const response = await fetch('/medioambiente/riles/api/v1/save-pdf-data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) throw new Error(`Error en el servidor: ${response.status}`);
+
+      const result = await response.json();
+      alert('Datos guardados correctamente.');
+    } catch (error) {
+      console.error('Error al guardar los datos:', error);
+      alert(`Error al guardar: ${error.message}`);
+    } finally {
+      btnSaveData.disabled = false;
+    }
+  });
+
+  fileInput.addEventListener('change', async (event) => {
+    const files = event.target.files;
+    if (!files?.length) return;
+
+    const formData = new FormData();
+    Array.from(files).forEach(file => formData.append('files', file));
+
+    b64Container.innerHTML = '<p>Cargando vista previa...</p>';
+    dynamicDataForm.innerHTML = '<p>Procesando datos del PDF...</p>';
+    navCounter.textContent = '0 / 0';
+    btnPrev.disabled = true;
+    btnNext.disabled = true;
+
+    try {
+      const response = await fetch('/medioambiente/riles/api/v1/process-multiple-pdfs', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) throw new Error(`Error en el servidor: ${response.status}`);
+
+      const { data = [] } = await response.json();
+      b64Container.innerHTML = '';
+      dynamicDataForm.innerHTML = '';
+      processedItems = data;
+      totalItems = data.length;
+
+      if (!totalItems) {
+        dynamicDataForm.textContent = 'No se encontraron datos.';
+        return;
+      }
+
+      data.forEach((item, pdfIndex) => {
+        const b64Val = item.base64 || item.b64;
+
+        // 1. Vista previa PDF (crea todos los elementos iframe o avisos)
+        if (b64Val) {
+          const srcUrl = b64Val.startsWith('data:') 
+            ? b64Val 
+            : `data:application/pdf;base64,${b64Val}`;
+
+          const iframe = document.createElement('iframe');
+          iframe.src = srcUrl;
+          iframe.style.display = 'none'; // Ocultos por defecto
+          b64Container.appendChild(iframe);
+        } else {
+          const noPdfMsg = document.createElement('div');
+          noPdfMsg.className = 'no-pdf-message';
+          noPdfMsg.style.display = 'none';
+          noPdfMsg.innerHTML = '<p>Sin vista previa de PDF</p>';
+          b64Container.appendChild(noPdfMsg);
+        }
+
+        // 2. Generar entradas dinámicas (crea todos los fieldsets)
+        const fieldset = document.createElement('fieldset');
+        fieldset.className = 'dynamic-data-fieldset';
+        fieldset.style.display = 'none'; // Ocultos por defecto
+
+        const legend = document.createElement('legend');
+        legend.textContent = item.name_archivo || `Documento ${pdfIndex + 1}`;
+        fieldset.appendChild(legend);
+
+        const { base64, b64, ...datosLimpios } = item;
+
+        Object.entries(datosLimpios).forEach(([key, value]) => {
+          const fieldWrapper = document.createElement('div');
+          fieldWrapper.className = 'field-wrapper';
+
+          const inputId = `input_${pdfIndex}_${key}`;
+
+          const label = document.createElement('label');
+          label.htmlFor = inputId;
+          label.textContent = key.replace(/_/g, ' ');
+
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.id = inputId;
+          input.name = `${key}_${pdfIndex}`;
+          input.value = value ?? '';
+
+          fieldWrapper.append(label, input);
+          fieldset.appendChild(fieldWrapper);
+        });
+
+        dynamicDataForm.appendChild(fieldset);
+      });
+
+      // Mostrar el primer PDF al terminar la carga
+      updateView(0);
+
+    } catch (error) {
+      console.error('Error al procesar el PDF:', error);
+      b64Container.innerHTML = '';
+      dynamicDataForm.innerHTML = `<p class="error-message">Error: ${error.message}</p>`;
+      navCounter.textContent = '0 / 0';
+      btnPrev.disabled = true;
+      btnNext.disabled = true;
+    }
+  });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>{{titulo}}</title>
+  <link rel="icon" type="image/png" href="http://smucognosprd01/ibmcognos/bi/v1/plugins/themes/current/favicon?v=1786046292280">
+  <link rel="stylesheet" href="{{ url_for('static_global', path='style/index.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static_global', path='style/scrollbar.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static_global', path='style/components.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static_global', path='style/code.css') }}">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.9.0/github-markdown.min.css">
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+  <!-- Tu Navbar fijo -->
+  <div class="navbarOverlay">
+    <div class="darkenedArea"></div>
+    <div class="navbarContent">
+      <h2>Navegación</h2>
+      <a href="/">
+        <span class="material-symbols-outlined mi-icono">home</span>
+        Inicio
+      </a>
+      <a href="/automatizaciones">
+        <span class="material-symbols-outlined mi-icono">Robot</span>
+        Automatizaciones
+      </a>
+      <a href="/background-processes">
+        <span class="material-symbols-outlined mi-icono">arrow_split</span>
+        Procedimientos en segundo plano
+      </a>
+      <a href="/documentacion/page">
+        <span class="material-symbols-outlined mi-icono">book</span>
+        Documentación
+      </a>
+      <a href="/plugin_generator">
+        <span class="material-symbols-outlined">extension</span>
+        Creación de Plugins
+      </a>
+      <a href="/documentacion/page">
+        <span class="material-symbols-outlined">account_circle</span>
+        Usuario
+      </a>
+    </div>
+  </div>
+  <nav>
+    <div class="nav-title">
+      <a href="/" >
+        Panel de Automatizaciones | Sostenibilidad
+      </a>
+    </div>
+    <div class="nav-dirs">
+      <div class="navbarToggleButton">
+        <span class="material-symbols-outlined mi-icono">menu</span>
+      </div>
+    </div>
+  </nav>
+
+<!-- El contenido dinámico cambia según la ruta de FastAPI -->
+  <div class="container">
+    {% block content %}{% endblock %}
+  </div>
+  <script>
+    const navbarToggleButton = document.getElementsByClassName("navbarToggleButton")[0];
+    const navbarOverlay = document.getElementsByClassName("navbarOverlay")[0];
+    const darkenedArea = navbarOverlay.getElementsByClassName("darkenedArea")[0];
+
+    // Al hacer clic en el botón de menú, desliza hacia adentro
+    navbarToggleButton.addEventListener("click", () => {
+      navbarOverlay.classList.add("activo");
+    });
+
+    // Al hacer clic en el fondo oscuro, desliza hacia afuera (cierra)
+    darkenedArea.addEventListener("click", () => {
+      navbarOverlay.classList.remove("activo");
+    });
+  </script>
+</body>
+</html>

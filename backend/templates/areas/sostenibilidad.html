@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block extra_css %}
+  <link rel="stylesheet" href="{{ url_for('static_global', path='style/areas/medioambiente.css') }}">
+{% endblock %}
+{% block content %}
+<div class="medioambiente-container">
+  <div class="Automation-filter">
+    <div class="title">
+      <h2>Filtros de Automatizaciones</h2>
+    </div>
+    <div class="list filter-list">
+      <div class="item">
+        <div class="item-title">
+          Busqueda
+        </div>
+        <div class="item-data">
+          <p><strong style="color: gainsboro;" >En desarrollo...</strong></p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="Automation-list">
+    
+    <div class="title">
+      <h2>Lista de Automatizaciones</h2>
+    </div>
+    <div class="list Automation-item-list">
+      <div class="item">
+        <div class="item-title">
+          <strong>
+            No Desperdicio de Alimentos
+          </strong>
+        </div>
+        <div class="item-data">
+          <div class="item-desc">Panel de no desperdicio de alimentos</div>
+          <div class="item-button">
+            <a href="http://127.0.0.1:8000/sostenibilidad/no_desperdicio_alimentos/">Acceder</a>
+          </div>
+        </div>
+      </div>
+      <div class="item"></div>
+      <div class="item"></div>
+      <div class="item"></div>
+      <div class="item"></div>
+      <div class="item"></div>
+      <div class="item"></div>
+      <div class="item"></div>
+      <div class="item"></div>
+      <div class="item"></div>
+      <div class="item"></div>
+      <div class="item"></div>
+    </div>
+
+  </div>
+</div>
+{% endblock %}

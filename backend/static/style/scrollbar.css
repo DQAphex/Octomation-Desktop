@@ -1,0 +1,47 @@
+@import url('./variables.css');
+
+* {
+  /* Ancho/alto de la barra (auto | thin | none) */
+  scrollbar-width: thin;
+
+  /* Color del thumb (deslizador) y track (fondo/pista) */
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+/* --------------------------------------------------------------------------
+  2. Motores WebKit / Blink (Chrome, Edge, Safari, Opera)
+   -------------------------------------------------------------------------- */
+
+/* Dimensiones de la barra de desplazamiento (vertical y horizontal) */
+::-webkit-scrollbar {
+  width: 8px;  /* Ancho para scrollbars verticales */
+  height: 8px; /* Alto para scrollbars horizontales */
+}
+
+/* Fondo / Pista por donde se desplaza */
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 8px;
+}
+
+/* El indicador o barra deslizante (Thumb) */
+::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb);
+  border-radius: 8px;
+  border: 2px solid var(--code-bg); /* Espaciado con respecto al track */
+}
+
+/* Estado Hover (al pasar el mouse sobre la barra) */
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--smu-highlight-color);
+}
+
+/* Estado Active (al presionar/arrastrar la barra) */
+::-webkit-scrollbar-thumb:active {
+  background-color: var(--smu-highlight-color-2);
+}
+
+/* Esquina entre la barra vertical y horizontal */
+::-webkit-scrollbar-corner {
+  background: var(--code-bg);
+}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+  <h2>Estructura del Proyecto</h2>
+  <button id="btn-copiar" class="btn btn-sm btn-outline-light position-absolute top-0 end-0 m-2">
+      Copiar
+  </button>
+  <div class="position-relative">
+    <pre class="bg-dark text-light p-3 rounded"><code id="codigo-estructura">
+      {% for linea in result.structure %}
+      {{ linea }}
+      {% endfor %}
+    </code></pre>
+  </div>
+</div>
+
+<script>
+  document.getElementById('btn-copiar').addEventListener('click', async () => {
+    const boton = document.getElementById('btn-copiar');
+    const codigo = document.getElementById('codigo-estructura').innerText;
+
+    try {
+      await navigator.clipboard.writeText(codigo);
+      
+      boton.innerText = '¡Copiado!';
+      boton.classList.replace('btn-outline-light', 'btn-success');
+
+      setTimeout(() => {
+        boton.innerText = 'Copiar';
+        boton.classList.replace('btn-success', 'btn-outline-light');
+      }, 2000);
+    } catch (err) {
+      console.error('Error al copiar: ', err);
+    }
+  });
+</script>
+{% endblock %}

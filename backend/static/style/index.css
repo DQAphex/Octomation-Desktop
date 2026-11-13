@@ -1,0 +1,173 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Merriweather:ital,opsz,wght@0,18..144,300..900;1,18..144,300..900&display=swap');
+@import url('./variables.css');
+
+html{
+  width: 100%;
+  height: 100svh;
+  margin: 0;  
+}
+
+body{
+  margin:0;
+  height: 100%;
+  font-family:var(--font-body-family);
+  display: grid;
+  grid-template-rows: 50px auto;
+  place-items: center;
+  background-color: var(--color-background);
+  color: var(--color-text);
+
+}
+
+nav{
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  height: 50px;
+  width: 100%;
+  background-color: var(--color-foreground);
+
+}
+
+.nav-title{
+  display: flex;
+  justify-content: start;
+  align-items: center;
+  padding-left: 10px;
+  font-family: var(--font-title-family);
+  font-size: 1.2rem;
+}
+.nav-title p {
+  margin: 0;
+}
+
+.nav-dirs{
+  display: flex;
+  justify-content: end;
+  align-items: center;
+  gap:10px;
+  padding-right: 10px;
+}
+
+a{
+  text-decoration: none;
+  color: var(--color-text);
+  transition: cubic-bezier(0.165, 0.84, 0.44, 1) 0.5s
+}
+a:hover{
+  color: var(--smu-highlight-color-2);
+  font-weight: 800;
+}
+.container {
+  width: 98%;
+  height: 96%;
+  max-height: 100%; /* Forzar un techo estricto al alto */
+  margin: auto; /* Centra el contenedor en pantalla sin usar align-items/justify-content */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 0; /* CLAVE SUPREMA: permite a los hijos encogerse */
+  border-radius: 8px;
+  background-color: var(--color-foreground);
+  padding: 24px;
+  box-sizing: border-box; /* Asegura que el padding no sume al 90% de alto */
+}
+.container * {
+  margin: 0;
+}
+.navbarToggleButton{
+  width: 50px;
+  color: var(--color-text);
+}
+.navbarToggleButton :hover{
+  cursor: pointer;
+}
+.navbarToggleButton:hover span{
+  transition: cubic-bezier(0.175, 0.885, 0.32, 1.275) .5s;
+}
+.navbarToggleButton:hover span{
+  color: var(--smu-highlight-color-2);
+}
+/* 1. Estado base del contenedor principal (oculto fuera de la pantalla a la derecha) */
+.navbarOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex; /* Cambiamos a flex para manejar mejor la distribución */
+  justify-content: flex-end; /* Pone el contenido a la derecha */
+  visibility: hidden; /* Oculto pero accesible para transiciones */
+  opacity: 0;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+  z-index: 1000;
+}
+
+/* 2. El área oscura de fondo */
+.darkenedArea {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+/* 3. El contenedor de los enlaces (el que se desliza) */
+.navbarContent {
+  position: relative;
+  display: grid;
+  grid-auto-rows: 50px;
+  width: 280px; /* Ancho de tu menú lateral */
+  height: 100%;
+  background-color: var(--color-foreground);
+  padding: 20px;
+  box-shadow: -4px 0 15px rgba(0, 0, 0, 0.1);
+  transform: translateX(100%); /* Empujado fuera de la pantalla hacia la derecha */
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 1001;
+}
+
+/* --- CLASE ACTIVA (Cuando se abre el menú) --- */
+.navbarOverlay.activo {
+  visibility: visible;
+  opacity: 1;
+}
+
+.navbarOverlay.activo .darkenedArea {
+  opacity: 1;
+}
+
+.navbarOverlay.activo .navbarContent {
+  transform: translateX(0); /* Se desliza a su posición original */
+}
+.navbarContent h2{
+  margin-bottom: 24px;
+  height: fit-content;
+}
+.navbarContent a{
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  padding-left: 10px;
+}
+
+.navbarContent a:hover{
+  background-color: var(--color-background);
+}
+.navbarContent a span{
+  width: 36px;
+  align-self: center;
+  font-variation-settings: 
+    'wght' 300,            /* Grosor de la línea (de 100 a 700) */
+    'FILL' 0;
+  transition: cubic-bezier(0.075, 0.82, 0.165, 1) .5s;
+}
+.navbarContent a:hover span{
+  font-variation-settings: 
+    'wght' 600,            /* Grosor de la línea (de 100 a 700) */
+    'FILL' 0;
+}

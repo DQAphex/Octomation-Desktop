@@ -1,0 +1,1 @@
+from .{plugin_name_lower} import router

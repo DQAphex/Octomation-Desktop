@@ -1,0 +1,683 @@
+# project-snapshot
+# Generated: 2026-10-24T05:00:24.495Z
+# Root: C:\Users\diego\Desktop\capstone\Fase 2\Evidencias Proyecto\repos\Octomation-Engine-Server\plugins\sostenibilidad
+
+=== no_desperdicio_alimentos\backgroundProcesses\DescargaDeExports\test.py ===
+from playwright.sync_api import sync_playwright
+
+
+def iniciar_sesion(usuario: str, password: str):
+  print("1 - iniciando Playwright")
+
+  with sync_playwright() as p:
+    print("2 - lanzando navegador")
+
+    browser = p.chromium.launch(
+      headless=False
+    )
+
+    print("3 - creando página")
+
+    page = browser.new_page()
+
+    print("4 - navegando")
+
+    page.goto(
+      "https://account.sovos.com/es-ES"
+    )
+
+    print("5 - página cargada:", page.url)
+
+    page.get_by_label("Correo electrónico").fill(usuario)
+
+    print("6 - usuario ingresado")
+
+    page.get_by_label("Contraseña").fill(password)
+
+    print("7 - contraseña ingresada")
+
+    page.get_by_role(
+      "button",
+      name="Iniciar sesión"
+    ).click()
+
+    print("8 - botón presionado")
+
+    page.wait_for_load_state("networkidle")
+
+    print("9 - login terminado")
+    print("URL:", page.url)
+
+    
+
+
+iniciar_sesion(
+  "dquioza@smu.cl",
+  "Unhamster123!"
+)
+
+=== no_desperdicio_alimentos\backgroundProcesses\LeerCorreos\metadata.json ===
+{
+  "id": "Certificados_recepción",
+  "name": "Lector Cetificados de recepción",
+  "description": "Busca certificados de recepción y los guarda en la carpeta deseada.",
+  "category": "sostenibilidad/no_desperdicio_alimentos",
+  "version": "1.0.0",
+  "entry_point": "worker.py",
+  "enabled": false,
+  "options": [
+    {
+      "key": "carpetas_a_revisar",
+      "name": "Carpetas a revisar",
+      "description": "Carpetas de Outlook que serán revisadas",
+      "option_type": "string",
+      "multiple": true
+    },
+    {
+      "key": "carpetas_de_destino",
+      "name": "Carpetas de destino",
+      "description": "Selecciona la carpeta a la que quieres que lleguen tus pdf",
+      "option_type": "folder_path",
+      "multiple": false
+    }
+  ] 
+}
+
+=== no_desperdicio_alimentos\backgroundProcesses\LeerCorreos\modules\file_rutine.py ===
+import fitz
+import io
+import re
+import pdfplumber
+
+class File_Runtime():
+
+  def __init__(self,pdf_bytes: bytes):
+    self.pdf_bytes=pdf_bytes
+    self.tables = []
+    self.folio = None
+    self.folios_gd = None
+    self.fecha_emision = None
+    self.nombre_razon_social = None
+    self.rut_razon_social = None
+    self.excel_export = []
+  def obtener_tablas(self):
+    with pdfplumber.open(io.BytesIO(self.pdf_bytes)) as pdf:
+      for pagina in pdf.pages:
+        self.tables = pagina.extract_tables()
+        return self.tables
+        
+  def buscar_tablas(self, palabra_clave):
+
+    for tabla in self.tables:
+      for fila in tabla:
+        for celda in fila:
+          if celda == palabra_clave:
+            return tabla  
+
+  def obtener_folios_gd(self) -> list[str]:
+    tabla = self.buscar_tablas("FOLIO") #fila = ['TIPO GUÍA DESPACHO', 'FOLIO', 'FECHA DE EMISIÓN', 'FECHA DE RECEPCIÓN']
+    folios = tabla[2][1]
+    self.folios_gd = folios.split("\n")
+    return folios.split("\n")
+  
+  def obtener_folio_certificado(self) -> list[str]:
+    tabla = self.buscar_tablas("Nº FOLIO:") #fila = ['TIPO GUÍA DESPACHO', 'FOLIO', 'FECHA DE EMISIÓN', 'FECHA DE RECEPCIÓN']
+    folio = tabla[0][2].split(" ")[1]
+    self.folio = folio
+    return folio
+  
+  def obtener_fecha_emision(self) -> list[str]:
+    tabla = self.buscar_tablas("Nº FOLIO:") #fila 3 = ['SANTIAGO', '07-09-2026', None]]
+    fecha_emision = tabla[2][1]
+    self.fecha_emision = fecha_emision
+    return fecha_emision
+  
+  def obtener_razon_social(self) -> list[str]:
+    tabla = self.buscar_tablas("INFORMACIÓN DE INSTITUCIÓN QUE ENTREGA PRODUCTOS")
+    fila_datos = tabla[1][1] #fila = ['NOMBRE O RAZÓN SOCIAL', 'RENDIC HERMANOS S.A.\n81537600-5\nCERRO EL PLOMO 5680, LAS CONDES\nJORGE SAEZ CORREA\n10034176-K']
+    lista_datos_importantes = fila_datos.split("\n")
+    nombre_razon_social = lista_datos_importantes[0]
+    rut_razon_social = lista_datos_importantes[1]
+    self.nombre_razon_social = nombre_razon_social
+    self.rut_razon_social = rut_razon_social
+    return [self.nombre_razon_social,self.rut_razon_social]
+
+  def generar_tabla_excel(self):
+    print(self.folios_gd)
+    for folio_gd in self.folios_gd:
+      self.excel_export.append([self.folio,folio_gd,self.rut_razon_social,self.nombre_razon_social,self.fecha_emision])
+    return self.excel_export
+  
+  def orchestrator_extract_data(self):
+
+    self.obtener_tablas()
+    self.obtener_folio_certificado()
+    self.obtener_fecha_emision()
+    self.obtener_razon_social()
+    self.obtener_folios_gd()
+    self.generar_tabla_excel()
+
+    return 
+
+=== no_desperdicio_alimentos\backgroundProcesses\LeerCorreos\modules\outlook_agent.py ===
+import os
+import re
+from datetime import datetime, timedelta
+import pythoncom
+import pymupdf
+import win32com.client
+import json
+from outlook_config import METADATA_DIR
+from paths import DB_DIR
+from sqlalchemy import create_engine, text
+import tempfile
+from .file_rutine import File_Runtime
+from .saveExcel import ExcelFile
+
+def get_bp_id(): 
+  with open(METADATA_DIR, "r", encoding="utf-8") as metadata:
+    datos = json.load(metadata)
+  id = datos["id"]
+  return id
+
+def getFunctionalData():
+  engine = create_engine(
+    f"sqlite:///{(DB_DIR / 'processes_registry.db').as_posix()}"
+  )
+
+  def getValues(engine, option):
+    with engine.connect() as connection:
+      result = connection.execute(
+        text("""
+          SELECT value
+          FROM bp_option_values
+          WHERE option_id = :option_id
+        """),
+        {"option_id": option}
+      )
+      return [row[0] for row in result]
+
+  bp_id = get_bp_id()
+  q_co = f"{bp_id}.carpetas_a_revisar"
+  q_cd = f"{bp_id}.carpetas_de_destino"
+
+  carpetas_outlook = getValues(engine, q_co)
+  carpetas_destino = getValues(engine, q_cd)
+
+  return carpetas_outlook, carpetas_destino
+
+CARPETA_OUTLOOK = "Red de alimentos"
+
+CARPETA_DESTINO : str = (
+  r"C:\Users\dquioza\OneDrive - SMU S.A"
+  r"\Escritorio\test"
+)
+
+
+def leer_pdf(pdf_bytes: bytes) -> str:
+  with pymupdf.open(
+    stream=pdf_bytes,
+    filetype="pdf"
+  ) as pdf:
+    return "".join(
+      pagina.get_text()
+      for pagina in pdf
+    )
+
+
+def obtener_folio(texto: str) -> str | None:
+  patron = (
+    r"N[º°]\s*FOLIO\s*:\s*"
+    r"(?:\n\s*)?"
+    r"N?[º°]?\s*(\d+)"
+  )
+
+  resultado = re.search(
+    patron,
+    texto,
+    re.IGNORECASE
+  )
+
+  if resultado:
+    return resultado.group(1)
+
+  return None
+
+
+def generar_nombre_archivo(folio: str) -> str:
+  folio_formateado = f"{int(folio):05d}"
+
+  return f"FOLIO_N_{folio_formateado}.pdf"
+
+
+def procesar_correos():
+  carpetas_outlook, carpetas_destino = getFunctionalData()
+  print(carpetas_outlook, carpetas_destino)
+
+  pythoncom.CoInitialize()
+  try:
+    cantidad_pdf = 0
+    outlook = win32com.client.Dispatch("Outlook.Application")
+    namespace = outlook.GetNamespace("MAPI")
+    inbox = namespace.GetDefaultFolder(6)
+
+    fecha_desde = (
+      datetime.now() - timedelta(days=2)
+    ).replace(
+      hour=0,
+      minute=0,
+      second=0,
+      microsecond=0
+    )
+
+    for nombre_carpeta in carpetas_outlook:
+      carpeta_destino = carpetas_destino[0]
+
+      try:
+        carpeta = inbox.Folders[nombre_carpeta]
+      except Exception:
+        print(
+          f"❌ No se encontró la carpeta "
+          f"'{nombre_carpeta}'"
+        )
+        continue
+
+      print(
+        f"✓ Carpeta encontrada: {nombre_carpeta}"
+      )
+      print(
+        f"✓ Destino: {carpeta_destino}"
+      )
+
+      os.makedirs(
+        carpeta_destino,
+        exist_ok=True
+      )
+
+      items = carpeta.Items
+      items.Sort("[ReceivedTime]", True)
+
+      for message in items:
+        try:
+          recibido = message.ReceivedTime
+
+          print(
+            f"Correo: {message.Subject} | "
+            f"ReceivedTime: {recibido}"
+          )
+
+          if recibido.tzinfo is not None:
+            recibido = recibido.replace(
+              tzinfo=None
+            )
+
+          if recibido < fecha_desde:
+            print(
+              "⏹ Correo anterior al límite. "
+              "Deteniendo búsqueda."
+            )
+            break
+
+          print(
+            f"Procesando correo: {message.Subject}"
+          )
+
+          if message.Attachments.Count == 0:
+            continue
+
+          for attachment in message.Attachments:
+            try:
+              nombre_original = attachment.FileName
+
+              if not nombre_original.lower().endswith(".pdf"):
+                continue
+
+              print(
+                f"  PDF encontrado: "
+                f"{nombre_original}"
+              )
+
+              with tempfile.NamedTemporaryFile(
+                  suffix=".pdf",
+                  delete=False
+                ) as temp:
+                  temp_path = temp.name
+
+              try:
+                attachment.SaveAsFile(temp_path)
+
+                with open(temp_path, "rb") as archivo:
+                  pdf_bytes = archivo.read()
+
+                texto = leer_pdf(pdf_bytes)
+                fr = File_Runtime(pdf_bytes=pdf_bytes)
+                fr.orchestrator_extract_data()
+
+                excel_guias = ExcelFile(file_path=carpetas_destino[0])
+                excel_guias.export_to_excel(table=fr.excel_export)
+                
+                folio = fr.folio
+
+              finally:
+                if os.path.exists(temp_path):
+                  os.remove(temp_path)
+
+              if not folio:
+                print(
+                  "  ⚠ No se encontró el folio."
+                )
+                continue
+
+              print(
+                f"  ✓ Folio encontrado: {folio}"
+              )
+
+              nombre_archivo = (
+                generar_nombre_archivo(folio)
+              )
+
+              ruta_destino = os.path.join(
+                carpeta_destino,
+                nombre_archivo
+              )
+
+              if os.path.exists(ruta_destino):
+                print(
+                  f"  ⚠ El archivo ya existe: "
+                  f"{nombre_archivo}"
+                )
+                continue
+
+              attachment.SaveAsFile(
+                ruta_destino
+              )
+
+              print(
+                f"  ✓ Guardado en: "
+                f"{ruta_destino}"
+              )
+
+              cantidad_pdf += 1
+
+            except Exception as e:
+              print(
+                f"  ❌ Error procesando adjunto "
+                f"'{attachment.FileName}': {e}"
+              )
+
+          print()
+
+        except Exception as e:
+          print(
+            f"❌ Error procesando correo "
+            f"'{message.Subject}': {e}"
+          )
+
+    print(
+      "========================================"
+    )
+    print(
+      f"✓ Proceso terminado. "
+      f"PDF descargados: {cantidad_pdf}"
+    )
+    print(
+      "========================================"
+    )
+
+  finally:
+    pythoncom.CoUninitialize()
+
+
+if __name__ == "__main__":
+  procesar_correos()
+
+=== no_desperdicio_alimentos\backgroundProcesses\LeerCorreos\modules\saveExcel.py ===
+import os
+from openpyxl import load_workbook,Workbook
+
+class ExcelFile:
+  def __init__(
+    self,
+    file_path: str,
+    file_name: str = "gestion_guias_despacho.xlsx"
+  ):
+    self.file_path = os.path.join(file_path, file_name)
+
+    if os.path.exists(self.file_path):
+      self.wb = load_workbook(self.file_path)
+    else:
+      self.wb = Workbook()
+
+    self.ws = self.wb.active
+
+  def export_to_excel(self, table):
+    print(table)
+    for row in table:
+      self.ws.append(row)
+
+    self.wb.save(self.file_path)
+
+=== no_desperdicio_alimentos\backgroundProcesses\LeerCorreos\outlook_config.py ===
+from pathlib import Path
+
+# Ruta raíz exclusiva de ESTA automatización
+BASE_DIR = Path(__file__).resolve().parent
+
+# Rutas internas relativas del subproyecto
+MODULES_DIR = BASE_DIR / "modules"
+DOWNLOADS_DIR = BASE_DIR / "downloads"
+METADATA_DIR = BASE_DIR / "metadata.json"
+
+=== no_desperdicio_alimentos\backgroundProcesses\LeerCorreos\worker.py ===
+import os
+import sys
+from pathlib import Path
+from plyer import notification 
+from paths import DB_DIR
+# Obtener la carpeta donde vive este worker.py (outlookChecker)
+CURRENT_DIR = Path(__file__).resolve().parent
+
+# Forzar a Python a buscar PRIMERO en la carpeta local de este worker
+if str(CURRENT_DIR) not in sys.path:
+  sys.path.insert(0, str(CURRENT_DIR))
+
+# Limpiar del caché cualquier 'config' previo cargado por otros scripts
+if "config" in sys.modules:
+  del sys.modules["config"]
+
+# Importar el config.py propio de esta carpeta
+from .outlook_config import DOWNLOADS_DIR
+from .modules.outlook_agent import procesar_correos
+
+
+
+def notificar_windows(titulo: str, mensaje: str) -> None:
+  """Muestra una notificación nativa en el escritorio de Windows."""
+  try:
+    notification.notify(
+        title=titulo,
+        message=mensaje,
+        app_name="Outlook PDF Checker",
+        timeout=5,  
+    )
+  except Exception as e:
+    print(f"Error al enviar notificación: {e}")
+
+def run():
+  notificar_windows(
+        "Lector Cetificados de recepción Activo",
+        "El programa está buscando correos con adjuntos PDF.",
+    )
+  procesar_correos()
+
+
+if __name__ == "__main__":
+  run()
+
+=== no_desperdicio_alimentos\backgroundProcesses\LeerCorreos\__init__.py ===
+
+
+=== no_desperdicio_alimentos\dto\no_desperdicio_alimentos_dto.py ===
+from pydantic import BaseModel
+
+class NoDesperdicioAlimentosBaseDTO(BaseModel):
+  nombre: str
+
+=== no_desperdicio_alimentos\metadata.json ===
+{
+  "plugin_name": "no_desperdicio_alimentos",
+  "plugin_category": "sostenibilidad",
+  "version": "0.0.1",
+  "created_at": "2026-09-08T19:28:31.280816+00:00",
+  "author": "Diego Quioza",
+  "email": "dquioza@smu.cl"
+}
+
+=== no_desperdicio_alimentos\no_desperdicio_alimentos.py ===
+from pathlib import Path
+from fastapi import APIRouter, Request, HTTPException, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
+from fastapi.templating import Jinja2Templates
+
+from .dto.no_desperdicio_alimentos_dto import NoDesperdicioAlimentosBaseDTO
+from .services.no_desperdicio_alimentos_service import NoDesperdicioAlimentosService
+from .no_desperdicio_alimentos_config import PAGES_DIR, SERVICES_DIR
+from paths import STATIC_DIR, TEMPLATES_DIR
+
+# Definimos el router
+router = APIRouter(
+    prefix="/no_desperdicio_alimentos",
+    tags=["No Desperdicio Alimentos"]
+)
+
+templates = Jinja2Templates(directory=[PAGES_DIR, TEMPLATES_DIR])
+
+@router.get("/")
+async def no_desperdicio_alimentos_page(request: Request):
+    """
+    Devuelve la página principal para el plugin No Desperdicio Alimentos.
+    """
+    return templates.TemplateResponse(
+        request=request,
+        name="main.html"
+    )
+
+
+@router.get("/hello-world")
+async def hello_world():
+    result = NoDesperdicioAlimentosService.get_hola_mundo()
+
+    return {
+        "message": result
+    }
+
+
+@router.post("/hello-name")
+async def hello_name(data: NoDesperdicioAlimentosBaseDTO):
+    result = NoDesperdicioAlimentosService.post_hola_nombre(data)
+
+    return {
+        "message": result
+    }
+
+=== no_desperdicio_alimentos\no_desperdicio_alimentos_config.py ===
+# ==============================================================================
+# 1. Plantilla Corregida: plugin_config.py.template
+# ==============================================================================
+from pathlib import Path
+
+# Metadata del plugin
+PLUGIN_NAME = "no_desperdicio_alimentos"
+PLUGIN_VERSION = "0.0.1"
+
+# Ruta raíz absoluta del plugin en tiempo de ejecución
+BASE_DIR = Path(__file__).resolve().parent
+
+# Estructura interna de directorios
+DATA_DIR = BASE_DIR / "data"
+PAGES_DIR = BASE_DIR / "pages"
+SERVICES_DIR = BASE_DIR / "services"
+STATIC_DIR = BASE_DIR / "static"
+BACKGROUND_PROCESSES_DIR = BASE_DIR / "backgroundProcesses"
+
+=== no_desperdicio_alimentos\pages\main.html ===
+{% extends "base.html" %}
+
+{% block extra_css %}
+  <link rel="stylesheet" href="{{ url_for('static_sostenibilidad_no_desperdicio_alimentos', path='styles/main.css') }}">
+{% endblock %}
+
+{% block content %}
+    <div class="no_desperdicio_alimentos-container">
+    </div>
+{% endblock %}
+
+=== no_desperdicio_alimentos\services\no_desperdicio_alimentos_service.py ===
+from ..dto.no_desperdicio_alimentos_dto import NoDesperdicioAlimentosBaseDTO
+
+
+class NoDesperdicioAlimentosService:
+
+    def __init__(self, metadata: NoDesperdicioAlimentosBaseDTO):
+        self.metadata = metadata
+
+    @staticmethod
+    def get_hola_mundo() -> str:
+        return "Hola mundo"
+
+    @staticmethod
+    def post_hola_nombre(
+        data: NoDesperdicioAlimentosBaseDTO
+    ) -> str:
+        return f"Hola {data.nombre}"
+
+=== no_desperdicio_alimentos\static\styles\main.css ===
+@import url('../variables.css');
+
+.no_desperdicio_alimentos-container {
+  display: grid;
+  grid-template-columns: 1fr 3fr;
+  grid-template-rows: 1fr;
+  width: 100%;
+  height: 100%; 
+  max-height: calc(100vh - 120px);
+  overflow: hidden;
+  background: var(--color-foreground);
+  border-radius: 8px;
+  position: relative;
+}
+
+=== no_desperdicio_alimentos\__init__.py ===
+from .no_desperdicio_alimentos import router
+
+=== sostenibilidad.py ===
+from fastapi import APIRouter, Request
+from fastapi.templating import Jinja2Templates
+from paths import TEMPLATES_DIR
+from .no_desperdicio_alimentos import router as no_desperdicio_alimentos
+
+router = APIRouter(
+  prefix="/sostenibilidad",
+  tags=["Sostenibilidad"]
+)
+
+router.include_router(no_desperdicio_alimentos)
+
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
+
+
+@router.get("/")
+async def inicio(request: Request):
+  datos = {
+    "titulo": "Panel de Lectura de pdf No Desperdicio Alimentos | Sostenibilidad"
+  }
+  return templates.TemplateResponse(
+    request=request, 
+    name="areas/sostenibilidad.html", 
+    context=datos
+  )
+
+=== __init__.py ===
+from .sostenibilidad import router
+

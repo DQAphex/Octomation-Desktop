@@ -1,0 +1,6 @@
+allowBuilds:
+  electron-winstaller: false
+nodeLinker: hoisted
+onlyBuiltDependencies:
+  - electron
+  - esbuild

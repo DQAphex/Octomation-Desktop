@@ -1,0 +1,46 @@
+
+.titlebar {
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-left: 12px;
+  background: #1d1425;
+  color: white;
+  user-select: none;
+  flex-shrink: 0;
+  -webkit-app-region: drag;
+}
+
+.titlebar-brand {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.titlebar-actions {
+  display: flex;
+  height: 36px;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: white;
+  font-size: .8rem;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.titlebar-actions button:hover {
+  background: #3a2d45;
+}
+
+.titlebar-actions button:last-child:hover {
+  background: #c42b1c;
+}

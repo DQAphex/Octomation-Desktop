@@ -1,0 +1,56 @@
+7cce7c0e (Diego Quioza Gonzalez 2026-09-02 10:30:14 -0400  1) import sys
+^173715a (Diego Quioza Gonzalez 2026-09-01 12:18:24 -0400  2) from pathlib import Path
+^173715a (Diego Quioza Gonzalez 2026-09-01 12:18:24 -0400  3) 
+7cce7c0e (Diego Quioza Gonzalez 2026-09-02 10:30:14 -0400  4) def get_bundle_dir() -> Path:
+7cce7c0e (Diego Quioza Gonzalez 2026-09-02 10:30:14 -0400  5)   """
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400  6)   Retorna la ruta raíz absoluta de los recursos (estáticos, templates, plugins).
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400  7)   Resuelve correctamente tanto en entorno de desarrollo como dentro del paquete
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400  8)   generado por PyInstaller (_MEIPASS).
+7cce7c0e (Diego Quioza Gonzalez 2026-09-02 10:30:14 -0400  9)   """
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 10)   if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 11)     return Path(sys._MEIPASS).resolve()
+7cce7c0e (Diego Quioza Gonzalez 2026-09-02 10:30:14 -0400 12)   return Path(__file__).resolve().parent
+^173715a (Diego Quioza Gonzalez 2026-09-01 12:18:24 -0400 13) 
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 14) def get_execution_dir() -> Path:
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 15)   """
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 16)   Retorna el directorio de ejecución real en disco donde reside el script o el .exe.
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 17)   Útil para guardar datos persistentes (bases de datos SQLite, logs, descargas).
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 18)   """
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 19)   if getattr(sys, "frozen", False):
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 20)     return Path(sys.executable).resolve().parent
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 21)   return Path(__file__).resolve().parent
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 22) 
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 23) # --- Directorio Raíz Dinámico de Recursos ---
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 24) ROOT_DIR = get_bundle_dir()
+^173715a (Diego Quioza Gonzalez 2026-09-01 12:18:24 -0400 25) 
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 26) # --- Directorio Raíz de Datos Persistentes ---
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 27) EXECUTION_DIR = get_execution_dir()
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 28) 
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 29) # Directorio para Bases de datos y archivos modificables (Fuera del bundle temporal)
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 30) DB_DIR = EXECUTION_DIR / "data"
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 31) 
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 32) # Directorios principales de la aplicación (Recursos empaquetados)
+^173715a (Diego Quioza Gonzalez 2026-09-01 12:18:24 -0400 33) TEMPLATES_DIR = ROOT_DIR / "templates"
+^173715a (Diego Quioza Gonzalez 2026-09-01 12:18:24 -0400 34) STATIC_DIR = ROOT_DIR / "static"
+^173715a (Diego Quioza Gonzalez 2026-09-01 12:18:24 -0400 35) DOCS_DIR = ROOT_DIR / "docs"
+47f869f6 (Diego Quioza Gonzalez 2026-09-02 09:01:14 -0400 36) PLUGINS_DIR = ROOT_DIR / "plugins"
+^173715a (Diego Quioza Gonzalez 2026-09-01 12:18:24 -0400 37) 
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 38) AUTOMATIONS_DIR = ROOT_DIR / "automations"
+^173715a (Diego Quioza Gonzalez 2026-09-01 12:18:24 -0400 39) BACKGROUND_PROCESSES_DIR = ROOT_DIR / "background_processes"
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 40) MEDIOAMBIENTE_DIR = AUTOMATIONS_DIR / "medioambiente"
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 41) SOSTENIBILIDAD_DIR = AUTOMATIONS_DIR / "sostenibilidad"
+^173715a (Diego Quioza Gonzalez 2026-09-01 12:18:24 -0400 42) 
+81b9d316 (Diego Quioza Gonzalez 2026-09-03 09:32:44 -0400 43) def print_venv_activation_command() -> None:
+d15eee7b (Diego Quioza Gonzalez 2026-09-07 12:02:14 -0300 44)     """
+d15eee7b (Diego Quioza Gonzalez 2026-09-07 12:02:14 -0300 45)     Imprime el comando estandarizado para activar el entorno virtual en PowerShell Windows,
+d15eee7b (Diego Quioza Gonzalez 2026-09-07 12:02:14 -0300 46)     asegurando el manejo de espacios y caracteres especiales en la ruta.
+d15eee7b (Diego Quioza Gonzalez 2026-09-07 12:02:14 -0300 47)     """
+d15eee7b (Diego Quioza Gonzalez 2026-09-07 12:02:14 -0300 48)     venv_script = (EXECUTION_DIR / "venv" / "Scripts" / "Activate.ps1").resolve()
+d15eee7b (Diego Quioza Gonzalez 2026-09-07 12:02:14 -0300 49)     
+d15eee7b (Diego Quioza Gonzalez 2026-09-07 12:02:14 -0300 50)     # Validar que el entorno virtual realmente exista antes de intentar activarlo
+d15eee7b (Diego Quioza Gonzalez 2026-09-07 12:02:14 -0300 51)     if not venv_script.exists():
+d15eee7b (Diego Quioza Gonzalez 2026-09-07 12:02:14 -0300 52)         sys.stderr.write(f"Error: No se encontró el script de activación en {venv_script}\n")
+d15eee7b (Diego Quioza Gonzalez 2026-09-07 12:02:14 -0300 53)         sys.exit(1)
+d15eee7b (Diego Quioza Gonzalez 2026-09-07 12:02:14 -0300 54) 
+d15eee7b (Diego Quioza Gonzalez 2026-09-07 12:02:14 -0300 55)     cmd = f'Set-ExecutionPolicy -Scope Process -ExecutionPolicy RemoteSigned -Force; & \'{venv_script}\''
+d15eee7b (Diego Quioza Gonzalez 2026-09-07 12:02:14 -0300 56)     print(cmd)

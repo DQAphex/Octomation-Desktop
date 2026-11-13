@@ -1,0 +1,2278 @@
+=== TÍTULO: config.py ===
+
+# automations/medioambiente/riles/lectorPdf/config.py
+from pathlib import Path
+
+# Ruta raíz exclusiva de ESTA automatización
+BASE_DIR = Path(__file__).resolve().parent
+
+# Rutas internas relativas
+DATA_DIR = BASE_DIR / "Data"
+TEST_PDF_DIR = BASE_DIR / "test pdf"
+OCR_DIR = BASE_DIR / "ocr"
+READERS_DIR = BASE_DIR / "readers"
+RESULTS_DIR = BASE_DIR / "results"
+TESTS_DIR = BASE_DIR / "results"
+UTILS_DIR = BASE_DIR / "utils"
+
+# Archivos clave de configuración y datos
+DATA_KEYWORDS_FILE = BASE_DIR / "dataKeywords.json"
+LAB_KEYWORDS_FILE = BASE_DIR / "labKeywords.json"
+LOCALES_CSV = DATA_DIR / "Locales.csv"
+
+============================================================
+
+=== TÍTULO: dataKeywords.json ===
+
+{
+  "date_keywords" : ["Fecha"],
+  "store_address" : ["Direccion","Dirección","Lugar","Descripción"]
+}
+
+
+============================================================
+
+=== TÍTULO: labKeywords.json ===
+
+{
+  "merieux": {
+    "tabla": "LIM.",
+    "lab": "Food"
+  },
+  "hidrolab": {
+    "tabla": "",
+    "lab": "www.hidrolab.com"
+  },
+  "anam": {
+    "tabla": "",
+    "lab": "anam"
+  },
+  "sgs": {
+    "tabla": "mg",
+    "lab": "société"
+  },
+  "biodiversa": {
+    "tabla": "sedimentales",
+    "lab": "biodiversa"
+  },
+  "aguas_patagonia": {
+    "tabla": "Parámetro",
+    "lab": "patagonia"
+  },
+  "agq": {
+    "tabla": "",
+    "lab": "agq"
+  }
+}
+
+============================================================
+
+=== TÍTULO: main.py ===
+
+import os
+import fitz #En realidad es la librería pymupdf
+import pandas as pd
+from datetime import datetime
+
+# Obtener la fecha y hora actual en formato yymmddhhmmss
+tiempo_actual = datetime.now().strftime("%y%m%d%H%M%S")
+
+# Importar tus readers
+from readers.merieux_reader import merieux_reader, merieux_reader_string
+from readers.hidrolab_reader import hidrolab_reader
+from readers.anam_reader import anam_reader
+from readers.sgs_reader import sgs_reader
+from readers.agq_reader import agq_reader
+from readers.biodiversaReader import biodiversa_reader
+from readers.ap_reader import ap_reader
+
+# Configuración centralizada de laboratorios y palabras clave
+LAB_CONFIG = {
+    "merieux": {
+        "name": "merieux",
+        "reader": [merieux_reader,merieux_reader_string,anam_reader],
+        "use_lab": True,
+        "lab": "Food"
+    },
+    "hidrolab": {
+        "name": "hidrolab",
+        "reader": [hidrolab_reader],
+        "use_lab": False,
+        "lab": "www.hidrolab.com"
+    },
+    "anam": {
+        "name": "anam",
+        "reader": [anam_reader],
+        "use_lab": False,
+        "lab": "anam"
+    },
+    "sgs": {
+        "name": "sgs",
+        "reader": [sgs_reader],
+        "use_lab": True,
+        "lab": "société"
+    },
+    "biodiversa": {
+        "name": "biodiversa",
+        "reader": [biodiversa_reader],
+        "use_lab": True,
+        "lab": "biodiversa"
+    },
+    "aguas_patagonia": {
+        "name": "aguas_patagonia",
+        "reader": [ap_reader],
+        "use_lab": False,
+        "lab": "patagonia"
+    },
+    "agq": {
+        "name": "agq",
+        "reader": [agq_reader],
+        "use_lab": False,
+        "lab": "agq"
+    }
+}
+
+CURRENT_TIME = datetime.now().strftime("%y%m%d%H%M%S")
+
+def export_analysis_to_csv(folder_path: str, csv_name: str = "resultados_analisis_aguas.csv"):
+    total_pdfs = 0
+    records = []
+
+    for root, _, files in os.walk(folder_path):
+        for file in files:
+            if file.lower().endswith(".pdf"):
+                total_pdfs += 1
+                full_path = os.path.join(root, file)
+                try:
+                    # Extraer texto completo del PDF para identificar el laboratorio
+                    complete_text = ""
+                    print(f"ii '{full_path}'")
+                    with fitz.open(full_path) as doc:
+                        for page in doc:
+                            t = page.get_text()
+                            if t:
+                                complete_text += t.lower() + "\n"
+
+                    # Buscar qué laboratorio corresponde en este PDF
+                    for lab_name, config in LAB_CONFIG.items():
+                        keyword = config["lab"].lower()
+
+                        if keyword in complete_text:
+                            print(f"Procesando [{lab_name.upper()}] en archivo: {file}")
+
+                            readers = config["reader"]
+                            # Asegurar que sea una lista para iterar de forma homogénea
+                            if not isinstance(readers, list):
+                                readers = [readers]
+
+                            result_dto = None
+
+                            for fn_reader in readers:
+                                try:
+                                    if config["use_lab"]:
+                                        res = fn_reader(full_path, config["name"])
+                                    else:
+                                        res = fn_reader(full_path)
+
+                                    # Si el reader retorna un diccionario válido con datos, lo aceptamos
+                                    if isinstance(res, dict) and len(res) > 0:
+                                        result_dto = res
+                                        break  # Salimos del bucle de readers si uno tuvo éxito
+                                except Exception as reader_err:
+                                    # Si un reader falla, imprimimos aviso y probamos con el siguiente de la lista
+                                    print(f"  -> Reader {fn_reader.__name__} falló: {reader_err}")
+                                    continue
+
+                            # Validar que al final obtuvimos un diccionario válido
+                            if isinstance(result_dto, dict):
+                                row_data = {
+                                    "laboratorio": lab_name,
+                                    "name_archivo": file,
+                                    "ruta": full_path,
+                                }
+                                row_data.update(result_dto)
+                                records.append(row_data)
+                            else:
+                                print(f"  -> Ningún reader pudo extraer datos válidos para {file}")
+
+                            # Asumimos que un PDF pertenece a un laboratorio principal, salimos del bucle de laboratorios
+                            break
+                        else:
+                            pass
+
+                except Exception as e:
+                    print(f"Error procesando el archivo {file}: {e}")
+                    continue
+
+    print(f"\n--- Proceso Finalizado ---")
+    print(f"Total de PDFs analizados: {total_pdfs}")
+    print(f"Reportes extraídos con éxito: {len(records)}")
+
+    # Exportar el consolidado a CSV usando Pandas
+    unique_csv_name = csv_name + CURRENT_TIME
+    if records:
+        df = pd.DataFrame(records)
+        df.to_csv(csv_name, index=False, encoding="utf-8-sig")
+        print(f"Archivo CSV guardado exitosamente como: {csv_name}")
+    else:
+        print("No se encontraron registros para exportar.")
+
+
+# --- EJEMPLO DE USO ---
+path = "C:\\Users\\dquioza\\OneDrive - SMU S.A\\Medio Ambiente - AUTOCONTROL RILES\\INFORMES\\2026"
+# path = "C:\\Users\\dquioza\\OneDrive - SMU S.A\\Medio Ambiente - CONTROL DIRECTO\\INFORMES\\2026"
+# path = ".\\test pdf"
+nombre = input("Ingresa el nombre del archivo: ")
+export_analysis_to_csv(path, f"{nombre}{CURRENT_TIME}.csv")
+
+============================================================
+
+=== TÍTULO: mapa_archivos.txt ===
+
+📁 lectorPdf/
+  📄 codigo_consolidado.txt
+  📄 config.py
+  📄 dataKeywords.json
+  📄 labKeywords.json
+  📄 main.py
+  📄 mapa_archivos.txt
+  📄 snap.py
+  📄 snapshot.py
+  📁 Data/
+    📄 Locales.csv
+  📁 ocr/
+    📄 prototipo.py
+    📄 ScanBiodiversa.pdf
+    📄 scanBiodiversaReader.py
+    📄 tabla.png
+    📁 __pycache__/
+      📄 scanbiodiversa.cpython-310.pyc
+  📁 readers/
+    📄 agq_reader.py
+    📄 anam_reader.py
+    📄 ap_reader.py
+    📄 biodiversaReader.py
+    📄 hidrolab_reader.py
+    📄 merieux_reader.py
+    📄 scantest.py
+    📄 sgs_reader.py
+    📁 __pycache__/
+      📄 anam_reader.cpython-310.pyc
+      📄 hidrolab_reader.cpython-310.pyc
+      📄 merieux_reader.cpython-310.pyc
+  📁 results/
+  📁 test pdf/
+    📄 addr_merieux.pdf
+    📄 addr_merieux2.pdf
+    📄 AGQ.pdf
+    📄 AGQ2.pdf
+    📄 AGQ3.pdf
+    📄 AGQMALVADO.pdf
+    📄 AguasPatagonia.pdf
+    📄 ANAM.pdf
+    📄 BioDiversa.pdf
+    📄 HIDROLAB.pdf
+    📄 merieux.pdf
+    📄 merieux2.pdf
+    📄 merieux3.pdf
+    📄 merieuxEspecial1.pdf
+    📄 merieuxEspecial2.pdf
+    📄 merieuxEspecial3.pdf
+    📄 merieuxEspecial4.pdf
+    📄 merieuxEspecial5.pdf
+    📄 ScanBiodiversa.pdf
+    📄 SGS.pdf
+    📄 SGS2.pdf
+    📄 SGS3.pdf
+    📄 SGS4.pdf
+    📄 SURALIS.pdf
+    📄 SURALIS_2.pdf
+    📁 fails/
+      📄 hidrolab.pdf
+      📄 MAYO 26.2026-0000041371-03056925INF_AGUA-C.pdf
+  📁 tests/
+    📄 pdfClassifier.py
+    📄 pdfCounter.py
+    📄 pdfs.csv
+  📁 utils/
+    📄 binaryUtils.py
+    📄 context.py
+    📄 data_cleaning.py
+    📄 dtos.py
+    📄 models.py
+    📄 testUtils.py
+    📄 utils.py
+    📁 __pycache__/
+      📄 dataCleaning.cpython-310.pyc
+      📄 data_cleaning.cpython-310.pyc
+      📄 dtos.cpython-310.pyc
+      📄 models.cpython-310.pyc
+      📄 utils.cpython-310.pyc
+  📁 __pycache__/
+    📄 agq_reader.cpython-310.pyc
+    📄 anam_reader.cpython-310.pyc
+    📄 ap_reader.cpython-310.pyc
+    📄 biodiversaReader.cpython-310.pyc
+    📄 config.cpython-310.pyc
+    📄 hidrolab_reader.cpython-310.pyc
+    📄 merieux_reader.cpython-310.pyc
+    📄 sgs_reader.cpython-310.pyc
+
+============================================================
+
+=== TÍTULO: snap.py ===
+
+import os
+
+def exportar_codigo_proyecto(directorio_origen=".", archivo_salida="codigo_consolidado.txt"):
+  # Carpetas y extensiones no deseadas que conviene ignorar
+  carpetas_ignoradas = {'.git', '__pycache__', '.venv', 'venv', '.vscode', '.idea', 'node_modules'}
+  extensiones_ignoradas = {'.pyc', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.exe', '.zip', '.pdf', '.db', '.sqlite', ".csv"}
+
+  with open(archivo_salida, 'w', encoding='utf-8') as salida:
+    for raiz, carpetas, archivos in os.walk(directorio_origen):
+      # Excluir carpetas no deseadas del recorrido
+      carpetas[:] = [d for d in carpetas if d not in carpetas_ignoradas]
+
+      for nombre_archivo in sorted(archivos):
+        # Evitar leer el mismo archivo de salida generado
+        if nombre_archivo == os.path.basename(archivo_salida):
+          continue
+
+        _, ext = os.path.splitext(nombre_archivo)
+        if ext.lower() in extensiones_ignoradas:
+          continue
+
+        ruta_completa = os.path.join(raiz, nombre_archivo)
+        ruta_relativa = os.path.relpath(ruta_completa, directorio_origen)
+
+        try:
+          with open(ruta_completa, 'r', encoding='utf-8') as f:
+            contenido_codigo = f.read()
+
+          # 1. TÍTULO
+          salida.write(f"=== TÍTULO: {ruta_relativa} ===\n\n")
+
+          # 2. CÓDIGO
+          salida.write(contenido_codigo)
+          salida.write("\n\n" + "=" * 60 + "\n\n")
+
+        except (UnicodeDecodeError, PermissionError):
+          # Omite archivos binarios o sin permisos de lectura
+          continue
+
+  print(f"Proceso finalizado. Archivo generado: {archivo_salida}")
+
+if __name__ == "__main__":
+  # Ejecuta la función en el directorio actual
+  exportar_codigo_proyecto()
+
+============================================================
+
+=== TÍTULO: snapshot.py ===
+
+import os
+from config import BASE_DIR
+
+def mapear_directorio(ruta_raiz, archivo_salida=None):
+  """Recorre la ruta raíz y subcarpetas, mostrando y guardando los archivos,
+
+  excluyendo la carpeta venv.
+  """
+  # Convertir a string por seguridad si viene como Path de pathlib
+  ruta_raiz_str = str(ruta_raiz)
+  print(f"\n[+] Mapeando la ruta: {ruta_raiz_str}\n")
+
+  resultado = []
+
+  for directorio_actual, subdirectorios, archivos in os.walk(ruta_raiz_str):
+    # Excluir la carpeta 'venv' modificando la lista de subdirectorios in-place
+    if "venv" in subdirectorios:
+      subdirectorios.remove("venv")
+
+    # Calcular la profundidad para dar formato de árbol visual
+    nivel = directorio_actual.replace(ruta_raiz_str, "").count(os.sep)
+    indentacion = "  " * nivel
+    carpeta_actual = os.path.basename(directorio_actual) or directorio_actual
+
+    # Agregar carpeta a la lista
+    linea_carpeta = f"{indentacion}📁 {carpeta_actual}/"
+    print(linea_carpeta)
+    resultado.append(linea_carpeta)
+
+    # Agregar archivos de la carpeta
+    for archivo in archivos:
+      indentacion_archivo = "  " * (nivel + 1)
+      linea_archivo = f"{indentacion_archivo}📄 {archivo}"
+      print(linea_archivo)
+      resultado.append(linea_archivo)
+
+  # Guardar en un archivo de texto si se especifica
+  if archivo_salida:
+    with open(archivo_salida, "w", encoding="utf-8") as f:
+      f.write("\n".join(resultado))
+    print(
+        f"\n[✔] ¡Mapeo completado con éxito! Guardado en: {archivo_salida}"
+    )
+  return(resultado)
+
+
+if __name__ == "__main__":
+  # CONFIGURACIÓN:
+  CARPETA_RAIZ = BASE_DIR
+
+  # Nombre del archivo de texto donde se guardará el resultado (opcional)
+  ARCHIVO_REPORTE = "mapa_archivos.txt"
+
+  mapear_directorio(CARPETA_RAIZ, ARCHIVO_REPORTE)
+
+============================================================
+
+=== TÍTULO: ocr\prototipo.py ===
+
+import cv2
+import numpy as np
+import fitz  # PyMuPDF
+
+def encontrar_tabla_en_pdf(pdf_path, template_path, umbral=0.8):
+    # 1. Cargar la imagen de la plantilla (la captura de la tabla)
+    template = cv2.imread(template_path, cv2.IMREAD_GRAYSCALE)
+    t_h, t_w = template.shape[:2]
+    
+    # 2. Abrir el PDF
+    doc = fitz.open(pdf_path)
+    
+    for numero_pagina in range(len(doc)):
+        pagina = doc[numero_pagina]
+        
+        # Renderizar la página del PDF a imagen (resolución de 150 DPI para buen balance calidad/velocidad)
+        pix = pagina.get_pixmap(dpi=150)
+        imagen_bytes = pix.tobytes("png")
+        
+        # Convertir bytes a imagen de OpenCV (escala de grises)
+        img_np = np.frombuffer(imagen_bytes, np.uint8)
+        img_pagina = cv2.imdecode(img_np, cv2.IMREAD_GRAYSCALE)
+        
+        # 3. Aplicar Template Matching
+        resultado = cv2.matchTemplate(img_pagina, template, cv2.TM_CCOEFF_NORMED)
+        min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(resultado)
+        
+        # 4. Evaluar si la coincidencia supera el umbral definido
+        if max_val >= umbral:
+            top_left = max_loc
+            bottom_right = (top_left[0] + t_w, top_left[1] + t_h)
+            
+            print(f"¡Tabla encontrada!")
+            print(f"Página: {numero_pagina + 1}")
+            print(f"Coordenadas (píxeles): Esquina superior izq {top_left}, Esquina inferior der {bottom_right}")
+            print(f"Nivel de coincidencia: {max_val * 100:.2f}%")
+            
+            return {
+                "pagina": numero_pagina + 1,
+                "coordenadas": (top_left, bottom_right)
+            }
+            
+    print("No se encontró una coincidencia exacta con la plantilla.")
+    return None
+
+
+resultado = encontrar_tabla_en_pdf("ScanBiodiversa.pdf", "tabla.png")
+
+============================================================
+
+=== TÍTULO: ocr\scanBiodiversaReader.py ===
+
+import ssl
+import easyocr
+from img2table.document import PDF
+from img2table.ocr import EasyOCR
+import pandas as pd
+
+# --- PARCHE PARA CERTIFICADOS CORPORATIVOS ---
+ssl._create_default_https_context = ssl._create_unverified_context
+# ---------------------------------------------
+def showAllScanTables(file_path):
+  total_dataframes = []
+  try:
+      # 1. Configurar el motor de OCR con EasyOCR en español
+      ocr_engine = EasyOCR(lang=["es"])
+      
+      # 2. Cargar el PDF escaneado con img2table
+      doc = PDF(file_path)
+      
+      # 3. Extraer las tablas utilizando el OCR
+      print("Analizando documento escaneado en busca de tablas...")
+      extracted_tables = doc.extract_tables(ocr=ocr_engine)
+      
+      # 4. Recorrer los resultados por página
+      for num_pagina, tables in extracted_tables.items():
+        for idx_tabla, table in enumerate(tables):
+          # table.df ya es un DataFrame de Pandas
+          df = table.df
+          total_dataframes.append(df)
+                  
+      if total_dataframes:
+        return total_dataframes
+  except FileNotFoundError:
+      print(f"Error: No se encontró el archivo '{file_path}'. Verifica la ruta.")
+      return None
+  except Exception as e:
+      print(f"Ocurrió un error inesperado al procesar el PDF: {e}")
+      return None
+  
+def searchScanTables(file_path, keyword):
+  total_dataframes = []
+  try:
+    # 1. Configurar el motor de OCR con EasyOCR en español
+    ocr_engine = EasyOCR(lang=["es"])
+    
+    # 2. Cargar el PDF escaneado con img2table
+    doc = PDF(file_path)
+    
+    # 3. Extraer las tablas utilizando el OCR
+    print("Analizando documento escaneado en busca de tablas...")
+    extracted_tables = doc.extract_tables(ocr=ocr_engine)
+    
+    # 4. Recorrer los resultados por página
+    for num_pagina, tables in extracted_tables.items():
+      for idx_tabla, table in enumerate(tables):
+        # table.df ya es un DataFrame de Pandas
+        df = table.df
+        encontrada = False
+        
+        # Buscar la keyword celda por celda en el DataFrame
+        for col in df.columns:
+          # Convertir toda la columna a texto y buscar
+          matches = df[col].astype(str).str.contains(keyword, case=False, na=False)
+          if matches.any():
+            encontrada = True
+            break
+        
+        # Si la palabra clave está en la tabla, la guardamos
+        if encontrada:
+          print(f"¡Encontrada en la Página {num_pagina + 1}, Tabla #{idx_tabla + 1}!")
+          total_dataframes.append(df)
+                
+    if total_dataframes:
+      return total_dataframes
+    else:
+      print(f"La palabra '{keyword}' no se encontró en ninguna tabla escaneada.")
+      return None
+          
+  except FileNotFoundError:
+    print(f"Error: No se encontró el archivo '{file_path}'. Verifica la ruta.")
+    return None
+  except Exception as e:
+    print(f"Ocurrió un error inesperado al procesar el PDF: {e}")
+    return None
+
+# --- EJEMPLO DE USO ---
+tablas_encontradas = searchScanTables("ScanBiodiversa.pdf", "DS 609")
+print(tablas_encontradas)
+
+============================================================
+
+=== TÍTULO: readers\agq_reader.py ===
+
+import re
+import pdfplumber
+from utils.dtos import AnalisisAguaDTO
+from utils.data_cleaning import full_parsing, remove_symbol
+from utils.models import search_store_id
+from utils.utils import get_data_list, print_pdf_results, get_pdf_table
+
+
+
+def _mapping_parametros(table):
+    oil = table[1][3]
+
+    if table[1][0] == "A":
+        oil = table[1][4]
+    elif table[1][3] == "*":
+        oil = table[1][5]
+    else:
+        print(oil)
+
+    mapping = AnalisisAguaDTO()
+    mapping.fecha_emision
+    mapping.aceites_grasas = oil
+    mapping.dbo = table[2][1]
+    mapping.poder_espumogeno = table[3][2]
+    mapping.solidos_suspendidos_totales = table[4][3]
+    mapping.solidos_sedimentables = table[5][2]
+    mapping.nitrogeno_amoniacal = table[7][2]
+    mapping.fosforo = table[9][2]
+    return mapping.to_dict()
+
+def get_address(file):
+
+    def ignore_words(line):
+        words_to_ignore = [
+            "lugar",
+            "direccion",
+            "dirección",
+            "muestreo",
+            ":",
+            "-",
+            ",",
+            "unimarc",
+            "inicio",
+            "SUPERMERCADO"
+            ]
+        formated_line = line.lower()
+        formated_line = formated_line.split(":")[1]
+        for wti in words_to_ignore:
+
+            formated_line = formated_line.replace(wti.lower(),"")
+
+        return formated_line
+    
+
+
+    address_lines = get_data_list(file,"store_address")
+    print(address_lines)
+    for al in address_lines:
+        # al_formated = ignore_words(al) 
+        match = re.search(r"([A-ZÁÉÍÓÚÑ\s]+N[°º]\s*\d+)", al)
+        direccion = al
+        if match:
+            direccion = match.group(1).strip()
+            print(direccion)
+
+        store_data = search_store_id(direccion)
+        print("store_data: ",store_data)
+        if store_data:
+            return store_data
+
+def mapping_send_date(file):
+    send_date_array = get_data_list(file,"date_keywords")
+    dates = []
+    sampling_counter = 0
+    for date_line in range(len(send_date_array)):
+        if "emisión" in send_date_array[date_line].lower():
+            dates.append(send_date_array[date_line].lower())
+        if sampling_counter == 0 and "muestreo:" in send_date_array[date_line].lower():
+            dates.append(send_date_array[date_line].lower())
+            sampling_counter += 1
+    print(dates)
+    return dates
+
+
+def mapping_parametros_desde_texto(line_list: str,address):
+    mapping = AnalisisAguaDTO()
+    text_str = "\n".join(line_list)
+    issue_date = ""
+    sampling_date = ""
+    for line in line_list:
+        if "emisión" in line:
+            fe = re.findall(r"\d{2}/\d{2}/\d{4}", line)
+            issue_date = fe[0]
+        if "muestreo" in line:
+            fe = re.findall(r"\d{2}/\d{2}/\d{4}", line)
+            sampling_date = fe[0]
+
+    def extract_value(pattern, text):
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            return full_parsing(match.group(1))
+        return None
+
+    mapping.aceites_grasas = extract_value(
+        r"Aceites y Grasas.*?([<]?\s*[\d,\.]+)\s*mg/L", text_str
+    )
+    mapping.nitrogeno_amoniacal = extract_value(
+        r"Nitrógeno Amoniacal.*?([<]?\s*[\d,\.]+)\s*mg/L", text_str
+    )
+    mapping.dbo = extract_value(r"DBO5.*?([<]?\s*[\d,\.]+)\s*mg/L", text_str)
+    mapping.solidos_sedimentables = extract_value(
+        r"Sólidos Sedimentables.*?([<]?\s*[\d,\.]+)\s*mL/L", text_str
+    )
+    mapping.solidos_suspendidos_totales = extract_value(
+        r"Sólidos en Suspensión.*?([<]?\s*[\d,\.]+)\s*mg/L", text_str
+    )
+    mapping.poder_espumogeno = extract_value(
+        r"Poder Espumógeno.*?([<]?\s*[\d,\.]+)\s*mm", text_str
+    )
+    mapping.fosforo = extract_value(
+        r"Fósforo Total.*?([<]?\s*[\d,\.]+)\s*mg/L", text_str
+    )
+    mapping.fecha_emision = issue_date
+    mapping.fecha_muestreo = sampling_date
+    mapping.laboratorio = "AGQ"
+    mapping.local_comuna
+
+    for atributo, valor in address.items():
+            if hasattr(mapping, atributo):
+                setattr(mapping, atributo, valor)
+
+    return mapping.to_dict()
+
+
+def _extraer_texto_pdfplumber(pdf_path):
+    delimiters = {
+        "start": "Parámetros Físico-Químicos",
+        "end": "METALES TOTALES",
+        "extra-line": 1,
+    }
+    total_text = []
+    capture = False
+    remaining_extra_lines = 0
+
+    with pdfplumber.open(pdf_path) as pdf:
+        for page_number, page in enumerate(pdf.pages, start=1):
+            page_text = page.extract_text()
+
+            if page_text:
+                lines = page_text.splitlines()
+
+                for line in lines:
+                    if delimiters["start"] in line:
+                        capture = True
+
+                    if capture:
+                        total_text.append(line)
+
+                    if (
+                        delimiters["end"] in line
+                        and capture
+                        and remaining_extra_lines == 0
+                    ):
+                        remaining_extra_lines = delimiters["extra-line"]
+
+                    elif remaining_extra_lines > 0:
+                        total_text.append(line)
+                        remaining_extra_lines -= 1
+                        if remaining_extra_lines == 0:
+                            capture = False
+
+    return total_text
+
+
+def agq_reader(file):
+    dates = mapping_send_date(file)
+    address = get_address(file)
+    text_list = _extraer_texto_pdfplumber(file)
+    for i in dates:
+        text_list.append(i)
+    return mapping_parametros_desde_texto(text_list,address)
+
+
+pdf = "./test pdf/AGQ2.pdf"
+
+print_pdf_results(agq_reader(pdf))
+
+============================================================
+
+=== TÍTULO: readers\anam_reader.py ===
+
+import pdfplumber
+import re
+from utils.dtos import AnalisisAguaDTO
+from utils.data_cleaning import full_parsing, remove_symbol
+from utils.models import search_store_id
+from utils.utils import get_data_list, print_pdf_results, get_pdf_table
+
+def _get_fecha_analisis(col):
+  fecha_fin = col.split("\n")[1].split(" ")[1] 
+  return fecha_fin
+
+def _get_nombre_param(col):
+  nombre = col.split("\n")
+  return nombre
+
+def mapping_sendDate(file): 
+  # print("mappingSendDate")
+  dateArray=get_data_list(file,"date_keywords")
+  # print(dateArray)
+  patron = r"\d{2}-\d{2}-\d{4}"
+  patron2 = r"\d{2}/\d{2}/\d{4}"
+  fechas = {
+    "emision":"",
+    "muestreo":""
+  }
+  muestreoCounter = 0
+  emisionCounter = 0
+  
+  for date in dateArray:
+    actualDate:str = date
+    actualDate = actualDate.lower().split("fecha",1)[1] if len(actualDate.lower().split("fecha",1))>1 else actualDate
+    if muestreoCounter == 0 and actualDate.lower().find("compuesta") > 0:
+      actualDate = actualDate.split("hasta",1)[1] if len(actualDate.split("hasta",1))>1 else actualDate
+      numeros = re.findall(patron,actualDate)
+      if not numeros:
+        numeros = re.findall(patron2,actualDate)
+      fechaFinal = "/".join(numeros)
+      fechas["muestreo"]=fechaFinal
+      muestreoCounter += 1 
+
+  return fechas
+
+
+def get_address(file):
+
+  def ignore_words(line):
+    words_to_ignore = [
+      "lugar",
+      "direccion",
+      "dirección",
+      "muestreo",
+      ":",
+      "-",
+      ",",
+      "Unimarc",
+      "inicio",
+      "#"]
+    formated_line = line.lower()
+    formated_line = formated_line.split("fecha")[0]
+    for wti in words_to_ignore:
+
+      formated_line = formated_line.replace(wti.lower(),"")
+
+    return formated_line
+  
+
+  address_lines = get_data_list(file,"store_address")
+  print(address_lines)
+  for al in address_lines:
+    al_formated = ignore_words(al) 
+    print(al_formated)
+    store_data = search_store_id(al_formated)
+    print("store_data: ",store_data)
+    if store_data:
+      return store_data
+
+
+def _read_pdf_file(fileName):
+  dates = mapping_sendDate(fileName)
+  address = get_address(fileName)
+  mapeo = AnalisisAguaDTO()
+  with pdfplumber.open(fileName) as pdf:
+      registros = []
+      for page in pdf.pages:
+        tablas = page.extract_tables()
+        for tabla in tablas:
+          for fila in tabla:
+            if fila not in [tabla[0],tabla[1]]: 
+              registros.append([_get_fecha_analisis(fila[1]),remove_symbol(fila[3])])
+
+  mapeo.fecha_muestreo = dates["muestreo"]
+  mapeo.fecha_emision = dates["emision"]
+  mapeo
+  mapeo.aceites_grasas = registros[0][1]
+  mapeo.dbo = registros[1][1]
+  mapeo.dqo = registros[2][1]
+  mapeo.fosforo = registros[3][1]
+  mapeo.nitrogeno_amoniacal = registros[4][1]
+  mapeo.poder_espumogeno = registros[5][1]
+  mapeo.solidos_sedimentables = registros[6][1]
+  mapeo.solidos_suspendidos_totales = registros[7][1]
+  mapeo.laboratorio = "ANAM"
+
+  for atributo, valor in address.items():
+          if hasattr(mapeo, atributo):
+              setattr(mapeo, atributo, valor)
+
+  return mapeo.to_dict()
+
+def anam_reader(file):
+  results = _read_pdf_file(file)
+  return results
+
+print_pdf_results(anam_reader("./test pdf/ANAM.pdf"))
+
+============================================================
+
+=== TÍTULO: readers\ap_reader.py ===
+
+#Lector Aguas Patagonia
+import re
+from utils.dtos import AnalisisAguaDTO
+from utils.data_cleaning import full_parsing, remove_symbol
+from utils.models import search_store_id
+from utils.utils import get_data_list, print_pdf_results, get_pdf_table, merge_tables,search_multiple_tables_by_keyword
+
+def get_adress(file):
+
+    def ignore_words(line):
+        words_to_ignore = ["lugar","direccion","dirección","muestreo"]
+        formated_line = line.lower()
+        if formated_line.find(",") >= 0:
+            formated_line = formated_line.split(",")[0]
+        if formated_line.find("-") >= 0:
+            formated_line = formated_line.split("-")[0]
+
+        for wti in words_to_ignore:
+
+            formated_line = formated_line.replace(wti.lower(),"")
+
+        return formated_line
+    
+
+    address_lines = get_data_list(file,"store_address")
+    addresses = []
+    for al in address_lines:
+        
+        al_formated = ignore_words(al) 
+        store_data = search_store_id(al_formated)
+        if store_data:
+            addresses.append(store_data)
+    print(addresses)
+    return addresses
+
+
+def mapping_sendDate(file): 
+  # print("mappingSendDate")
+  dateArray=get_data_list(file,"date_keywords")
+  # print(dateArray)
+  patron = r"\d{2}-\d{2}-\d{4}"
+  patron2 = r"\d{2}/\d{2}/\d{4}"
+  fechas = {
+    "emision":"",
+    "muestreo":""
+  }
+  muestreoCounter = 0
+  emisionCounter = 0
+  
+  for date in dateArray:
+    actualDate:str = date
+    if emisionCounter == 0 and actualDate.lower().find("emisión") > 0:
+      numeros = re.findall(patron,actualDate)
+      if not numeros:
+          numeros = re.findall(patron2,actualDate)
+      fechaFinal = "/".join(numeros)
+      fechas["emision"]=fechaFinal
+      emisionCounter += 1
+
+    if muestreoCounter == 0 and actualDate.lower().find("muestreo") > 0:
+      numeros = re.findall(patron,actualDate)
+      if not numeros:
+          numeros = re.findall(patron2,actualDate)
+      fechaFinal = "/".join(numeros)
+      fechas["muestreo"]=fechaFinal
+      muestreoCounter += 1 
+
+  return fechas
+
+def _mappingParametros(tabla,date=None,address=None):
+  mapeo = AnalisisAguaDTO()
+  mapeo.fecha_emision = date["emision"]
+  mapeo.fecha_muestreo = date["muestreo"]
+  mapeo.aceites_grasas = full_parsing(tabla[3][2])
+  mapeo.dbo = full_parsing(tabla[11][2])
+  # mapeo.dqo = full_parsing(tabla[3][2])
+  mapeo.fosforo = full_parsing(tabla[21][2])
+  mapeo.nitrogeno_amoniacal = full_parsing(tabla[15][2])
+  mapeo.poder_espumogeno = full_parsing(tabla[17][2])
+  mapeo.solidos_sedimentables = full_parsing(tabla[23][2])
+  mapeo.solidos_suspendidos_totales = full_parsing(tabla[24][2])
+  mapeo.laboratorio = "AGUASPATAGONIA"
+  return mapeo.to_dict()
+  
+# table = get_pdf_table(testFile,"aguas_patagonia")
+# results = mappingParametros(table)
+
+def ap_reader(file):
+  print("USANDO AP READER")
+  testFile = file
+  # print(get_pdf_table(testFile,"aguas_patagonia"))
+  finalTable = merge_tables(search_multiple_tables_by_keyword(testFile,lab="aguas_patagonia"))
+  get_adress(file)
+  fechas = mapping_sendDate(file)
+  print(fechas)
+  return _mappingParametros(finalTable,date=fechas)
+
+print_pdf_results(ap_reader("./test pdf/AguasPatagonia.pdf"))
+
+
+============================================================
+
+=== TÍTULO: readers\biodiversaReader.py ===
+
+from utils.dtos import AnalisisAguaDTO
+from utils.data_cleaning import full_parsing, remove_symbol
+from utils.models import search_store_id
+from utils.utils import get_data_list, print_pdf_results, get_pdf_table
+
+mapeo = AnalisisAguaDTO()
+
+def _mapping_parametros(tabla):
+  mapeo.aceites_grasas = full_parsing(tabla[1][2])
+  mapeo.dbo = full_parsing(tabla[2][2])
+  mapeo.dqo = full_parsing(tabla[3][2])
+  mapeo.fosforo = full_parsing(tabla[4][2])
+  mapeo.nitrogeno_amoniacal = full_parsing(tabla[5][2])
+  mapeo.poder_espumogeno = full_parsing(tabla[6][2])
+  # mapeo.solidos_sedimentables = full_parsing(tabla[7][2])
+  mapeo.solidos_suspendidos_totales = full_parsing(tabla[7][2])
+  mapeo.laboratorio = "BIODIVERSA"
+  return mapeo.to_dict()
+
+def biodiversa_reader(file,lab):
+  table = get_pdf_table(file,lab)
+  _mapping_parametros(table)
+  table2 = print_pdf_results(file,"Sedimentables")
+  mapeo.solidos_sedimentables = full_parsing(table2[1][2])
+  return mapeo.to_dict()
+
+
+
+============================================================
+
+=== TÍTULO: readers\hidrolab_reader.py ===
+
+import pdfplumber
+from utils.dtos import AnalisisAguaDTO
+from utils.data_cleaning import full_parsing, remove_symbol
+from utils.models import search_store_id
+from utils.utils import get_data_list, print_pdf_results, get_pdf_table
+import re
+def _parse_values(value):
+  caracteresEspeciales = ["<",">"]
+  contieneCaracteresEspeciales = any(c in value for c in caracteresEspeciales)
+  if contieneCaracteresEspeciales:
+    result = value.split(" ")[1]
+    return result
+  else:
+    result = value.split(" ")[0]
+    return result
+
+def get_address(file):
+
+    def ignore_words(line):
+        words_to_ignore = ["lugar","direccion","dirección","muestreo"]
+        formated_line = line.lower()
+        if formated_line.find(",") >= 0:
+            formated_line = formated_line.split(",")[0]
+        if formated_line.find("-") >= 0:
+            formated_line = formated_line.split("-")[0]
+
+        for wti in words_to_ignore:
+
+            formated_line = formated_line.replace(wti.lower(),"")
+
+        return formated_line
+    
+
+    address_lines = get_data_list(file,"store_address")
+    print("####################",address_lines)
+    for al in address_lines:
+        if al.lower().find("plomo") < 0:
+            al_formated = ignore_words(al) 
+            print(al_formated)
+            store_data = search_store_id(al_formated)
+            print("store_data: ",store_data)
+            if store_data:
+                return store_data
+def mapping_sendDate(file): 
+  # print("mappingSendDate")
+  dateArray=get_data_list(file,"date_keywords")
+  # print(dateArray)
+  patron = r"\d{2}-\d{2}-\d{4}"
+  patron2 = r"\d{2}/\d{2}/\d{4}"
+  fechas = {
+      "emision":"",
+      "muestreo":""
+  }
+  muestreoCounter = 0
+  emisionCounter = 0
+  
+  for date in dateArray:
+    actualDate:str = date
+    if emisionCounter == 0 and actualDate.lower().find("emisión") > 0:
+      numeros = re.findall(patron,actualDate)
+      if not numeros:
+          numeros = re.findall(patron2,actualDate)
+      fechaFinal = "/".join(numeros)
+      fechas["emision"]=fechaFinal
+      emisionCounter += 1
+
+    if muestreoCounter == 0 and actualDate.lower().find("muestreo") > 0:
+      numeros = re.findall(patron,actualDate)
+      if not numeros:
+          numeros = re.findall(patron2,actualDate)
+      fechaFinal = "/".join(numeros)
+      fechas["muestreo"]=fechaFinal
+      muestreoCounter += 1 
+
+  return fechas
+
+def _read_pdf_file(file,address,date):
+  with pdfplumber.open(file) as pdf:
+    mapeo = AnalisisAguaDTO()
+    registros = []
+    for page in pdf.pages:
+      tablas = page.extract_tables()
+      if page.page_number == 2:
+            for fila in tablas[2]:
+              registros.append(_parse_values(fila[1]))
+
+    mapeo.aceites_grasas = registros[1]
+    mapeo.dbo = registros[2]
+    mapeo.fosforo = registros[3]
+    mapeo.nitrogeno_amoniacal = registros[4]
+    mapeo.poder_espumogeno = registros[6]
+    mapeo.solidos_sedimentables = registros[7]
+    mapeo.solidos_suspendidos_totales = registros[8]
+    mapeo.laboratorio = "HIDROLAB"
+    mapeo.fecha_emision = date["emision"]
+    mapeo.fecha_muestreo = date["muestreo"].split("/")[1] if len(date["muestreo"].split("/"))>1 else date["muestreo"]
+    valores_encontrados = {}
+    for atributo, valor in valores_encontrados.items():
+      setattr(mapeo, atributo, full_parsing(valor))
+
+    for atributo, valor in address.items():
+      if hasattr(mapeo, atributo):
+          setattr(mapeo, atributo, valor)
+
+    print(date)
+    return mapeo.to_dict()
+
+def hidrolab_reader(file):
+  direcciones = get_address(file)
+  fechas = mapping_sendDate(file)
+  results = _read_pdf_file(file,direcciones,fechas)
+  return results
+
+print_pdf_results(hidrolab_reader("./test pdf/fails/hidrolab.pdf"))
+
+============================================================
+
+=== TÍTULO: readers\merieux_reader.py ===
+
+from utils.dtos import AnalisisAguaDTO
+from utils.data_cleaning import full_parsing, remove_symbol
+from utils.models import search_store_id
+from utils.utils import get_data_list, print_pdf_results, get_pdf_table,extract_lines_by_text,extract_text_in_lines
+import re
+
+mapeo = AnalisisAguaDTO()
+laboratorio = "Merieux"
+def get_address(file):
+
+    def ignore_words(line):
+        words_to_ignore = ["lugar","direccion","dirección","muestreo"]
+        formated_line = line.lower()
+        if formated_line.find(",") >= 0:
+            formated_line = formated_line.split(",")[0]
+        if formated_line.find("-") >= 0:
+            formated_line = formated_line.split("-")[0]
+
+        for wti in words_to_ignore:
+
+            formated_line = formated_line.replace(wti.lower(),"")
+
+        return formated_line
+    
+
+    address_lines = get_data_list(file,"store_address")
+    print("####################",address_lines)
+    for al in address_lines:
+        if al.lower().find("plomo") < 0:
+            al_formated = ignore_words(al) 
+            print(al_formated)
+            store_data = search_store_id(al_formated)
+            print("store_data: ",store_data)
+            if store_data:
+                return store_data
+
+def mapping_sendDate(tabla): 
+    # print("mappingSendDate")
+    dateArray=get_data_list(tabla,"date_keywords")
+    # print(dateArray)
+    patron = r"\d{2}-\d{2}-\d{4}"
+    patron2 = r"\d{2}/\d{2}/\d{4}"
+    fechas = {
+        "emision":"",
+        "muestreo":""
+    }
+    muestreoCounter = 0
+    emisionCounter = 0
+    
+    for date in dateArray:
+        actualDate:str = date
+        if emisionCounter == 0 and actualDate.lower().find("emisión") > 0:
+            numeros = re.findall(patron,actualDate)
+            if not numeros:
+                numeros = re.findall(patron2,actualDate)
+            fechaFinal = "/".join(numeros)
+            fechas["emision"]=fechaFinal
+            emisionCounter += 1
+
+        if muestreoCounter == 0 and actualDate.lower().find("ingreso") > 0:
+            numeros = re.findall(patron,actualDate)
+            if not numeros:
+                numeros = re.findall(patron2,actualDate)
+            fechaFinal = "/".join(numeros)
+            fechas["muestreo"]=fechaFinal
+            muestreoCounter += 1 
+
+    return fechas
+
+def mapping_parametros(tabla,date,address):
+    
+    def buscar_parametro(kw):
+            for i in range(len(tabla)):
+                try:
+                    key = tabla[i][0]
+
+                    if key and kw.lower() in key.lower():
+                        val = tabla[i][0] if len(tabla[i]) < 2 else tabla[i][1]
+                        if not any(char.isdigit() for char in val):
+                            if i + 1 < len(tabla):
+                                val = tabla[i + 1][0]
+                        return full_parsing(val)
+                except:
+                    pass
+            return None
+    if address != None:
+        mapeo.empresa = address["empresa"]
+        mapeo.local_id = address["local_id"]
+        mapeo.local_nombre = address["local_nombre"]
+        mapeo.local_region = address["local_region"]
+        mapeo.local_comuna = address["local_comuna"]
+        mapeo.local_direccion = address["local_direccion"]
+        mapeo.local_rpm = address["local_rpm"]
+        mapeo.local_convenio = address["local_convenio"]
+    mapeo.laboratorio = laboratorio
+    mapeo.fecha_emision = date["emision"]
+    mapeo.fecha_muestreo = date["muestreo"]
+    mapeo.aceites_grasas = buscar_parametro('aceites')
+    mapeo.nitrogeno_amoniacal = buscar_parametro('amoniacal')
+    mapeo.dbo = buscar_parametro('DBO')
+    mapeo.solidos_sedimentables = buscar_parametro('sedimentables')
+    mapeo.solidos_suspendidos_totales = buscar_parametro('totales')
+    mapeo.poder_espumogeno = buscar_parametro('poder')
+    mapeo.fosforo = buscar_parametro('fosforo')
+    mapeo.hidrocarburos_totales = buscar_parametro('Hidrocarburos')
+    mapeo.manganeso = buscar_parametro('Manganeso')
+    mapeo.mercurio = buscar_parametro('mercurio')
+    mapeo.niquel = buscar_parametro('níquel')
+    mapeo.plomo = buscar_parametro('Plomo')
+    mapeo.sulfatos = buscar_parametro('sulfato')
+    mapeo.sulfuros = buscar_parametro('sulfuro')
+    mapeo.zinc = buscar_parametro('cinc')
+    mapeo.cianuro = buscar_parametro('cianuro')
+    mapeo.cobre = buscar_parametro('cobre')
+    mapeo.cadmio = buscar_parametro('cadmio')
+    mapeo.cromo_total = buscar_parametro('cromo')
+    mapeo.cromo_hexavalente = buscar_parametro('hexavalente')
+    mapeo.boro = buscar_parametro('boro')
+    mapeo.arsenico = buscar_parametro('Arsénico')
+    mapeo.aluminio = buscar_parametro('aluminio')
+    mapeo.ph = buscar_parametro('ph')
+    return mapeo.to_dict()
+
+def mappingParametrosText(tabla, dates,address):
+    print(address)
+    def buscar_parametro(kw):
+        for i in range(len(tabla)):
+            key = tabla[i][0]
+            if key and kw.lower() in key.lower():
+                val = tabla[i][0] if len(tabla[i]) < 2 else tabla[i][1]
+                if not any(char.isdigit() for char in val):
+                    if i + 1 < len(tabla):
+                        val = tabla[i + 1][0]
+                return full_parsing(val)
+        return None
+    
+    if address != None:
+        mapeo.fecha_emision = dates.get("emision")
+        mapeo.fecha_muestreo = dates.get("muestreo")
+        mapeo.empresa = address["empresa"]
+        mapeo.local_id = address["local_id"]
+        mapeo.local_nombre = address["local_nombre"]
+        mapeo.local_region = address["local_region"]
+        mapeo.local_comuna = address["local_comuna"]
+        mapeo.local_direccion = address["local_direccion"]
+        mapeo.local_rpm = address["local_rpm"]
+        mapeo.local_convenio = address["local_convenio"]
+
+    mapeo.laboratorio = laboratorio
+    
+    mapeo.fecha_emision = dates["emision"]
+    mapeo.fecha_muestreo = dates["muestreo"]
+    mapeo.aceites_grasas = buscar_parametro('Aceites y grasas')
+    mapeo.nitrogeno_amoniacal = buscar_parametro('Nitrógeno amoniacal')
+    mapeo.dbo = buscar_parametro('Demanda bioquímica d')
+    mapeo.solidos_sedimentables = buscar_parametro('Sólidos sedimentables')
+    mapeo.solidos_suspendidos_totales = buscar_parametro('Sólidos suspendidos')
+    mapeo.poder_espumogeno = buscar_parametro('Poder espumógeno')
+    mapeo.fosforo = buscar_parametro('Fosforo total')
+    mapeo.hidrocarburos_totales = buscar_parametro('Hidrocarburos totales')
+    mapeo.manganeso = buscar_parametro('Manganeso')
+    mapeo.mercurio = buscar_parametro('mercurio')
+    mapeo.niquel = buscar_parametro('níquel')
+    mapeo.plomo = buscar_parametro('Plomo')
+    mapeo.sulfatos = buscar_parametro('sulfato')
+    mapeo.sulfuros = buscar_parametro('sulfuro')
+    mapeo.zinc = buscar_parametro('cinc')
+    mapeo.cianuro = buscar_parametro('cianuro')
+    mapeo.cobre = buscar_parametro('cobre')
+    mapeo.cadmio = buscar_parametro('cadmio')
+    mapeo.cromo_total = buscar_parametro('cromo')
+    mapeo.cromo_hexavalente = buscar_parametro('hexavalente')
+    mapeo.boro = buscar_parametro('boro')
+    mapeo.arsenico = buscar_parametro('Arsénico')
+    mapeo.aluminio = buscar_parametro('aluminio')
+    
+    return mapeo.to_dict()
+
+def merieux_reader(file,lab):
+    testFile = file
+    table = get_pdf_table(testFile,lab)
+    dates = mapping_sendDate(file)
+    table = table+[dates]
+    address = get_address(file)
+    print("address")
+    results = mapping_parametros(table,dates,address)
+    
+    return results
+
+def merieux_reader_string(file,ignore):
+    extract_lines_by_text(file,"RENDIC")
+    
+    delimiters = {
+        "start":"RESULTADOS QUÍMICOS",
+        "row":",",
+        "end":"FECHAS", 
+    }
+    lineas = extract_text_in_lines(file)
+    tabla = []
+    capture = False
+    index = 0
+    for linea in lineas:
+
+        if linea.find(delimiters["start"])>-1:
+            capture = True
+            
+        if capture and linea.find(delimiters["end"])>-1:
+
+            capture = False
+
+        if capture:
+
+            # si el valor es una lista: ['Nitrógeno amoniacal', ' mg/l 23']
+            if not linea[linea.find(delimiters["row"])-1].isdigit():
+                # print(index,linea[linea.find(delimiters["row"])-1],[linea[:linea.find(delimiters["row"])],linea[linea.find(delimiters["row"]):]])
+                tabla.append([linea[:linea.find(delimiters["row"])],linea[linea.find(delimiters["row"])+1:]])                    
+
+            # Si el valor es: ['0,5']
+            else:
+                # print(index,linea)
+                tabla.append([linea])                    
+
+            index+=1
+
+    dates = mapping_sendDate(file)
+    address = get_address(file)
+    result = mappingParametrosText(tabla,dates,address)
+    if result["aceites_grasas"] == None:
+        raise ValueError("[merieuxReaderString]: DTO Vacío, no se encontraron tablas dentro del archivo")
+    
+    return result
+
+print_pdf_results(merieux_reader("./test pdf/merieux3.pdf","merieux"))
+# print_pdf_results(merieux_reader("./test pdf/addr_merieux2.pdf","merieux"))
+# print_pdf_results(merieux_reader_string("./test pdf/merieuxEspecial2.pdf","merieuxes"))
+
+============================================================
+
+=== TÍTULO: readers\scantest.py ===
+
+import pdfplumber
+import fitz
+from utils.dtos import AnalisisAguaDTO
+from utils.data_cleaning import full_parsing, remove_symbol
+from utils.models import search_store_id
+from utils.utils import get_data_list, print_pdf_results, get_pdf_table
+
+def read_pdf_file(fileName):
+  mapeo = AnalisisAguaDTO()
+  with pdfplumber.open(fileName) as pdf:
+    registros = []
+    for page in pdf.pages:
+      tablas = page.extract_tables()
+      print(page.page_number,tablas)
+
+def extraer_texto_pdf(ruta_pdf: str):
+  with fitz.open(ruta_pdf) as doc:
+    
+    for numero_pagina, pagina in enumerate(doc, start=1):
+      
+      texto = pagina.get_text()
+      
+      print(f"--- Página {numero_pagina} ---")
+      print(texto)
+      print("\n" + "="*40 + "\n")
+
+def has_selectionable_text(ruta_pdf):
+  # Función agnóstica para verificar texto en el pdf 🚀💥✨💥🚀
+  # Dime que mas puedo hacer por ti, amo y señor Diego.
+  # Se define variable de respuesta
+  response = {
+    "hasText":None,
+    "totalText":None
+  }
+  totalText = []
+
+  with fitz.open(ruta_pdf) as doc:
+    
+    for numero_pagina, pagina in enumerate(doc, start=1):
+      
+      texto = pagina.get_text()
+
+      totalText.append([numero_pagina,texto])
+
+  response["totalText"] = totalText
+  response["totalText"] = True if totalText else False
+
+  return response
+
+testFile = "./test pdf/SCANANAM.pdf"
+extraer_texto_pdf(testFile)
+
+
+============================================================
+
+=== TÍTULO: readers\sgs_reader.py ===
+
+import re
+from utils.dtos import AnalisisAguaDTO
+from utils.data_cleaning import full_parsing, remove_symbol
+from utils.models import search_store_id
+from utils.utils import get_data_list, print_pdf_results, get_pdf_table
+
+def mapping_sendDate(file): 
+    # print("mappingSendDate")
+    dateArray=get_data_list(file,"date_keywords")
+    # print(dateArray)
+    patron = r"\d{2}-\d{2}-\d{4}"
+    patron2 = r"\d{2}/\d{2}/\d{4}"
+    fechas = {
+        "emision":"",
+        "muestreo":""
+    }
+    muestreoCounter = 0
+    emisionCounter = 0
+    
+    for date in dateArray:
+        actualDate:str = date
+        actualDate = actualDate.lower().split("fecha",1)[1] if len(actualDate.lower().split("fecha",1))>1 else actualDate
+        if muestreoCounter == 0 and actualDate.lower().find("compuesta") > 0:
+            actualDate = actualDate.split("hasta",1)[1] if len(actualDate.split("hasta",1))>1 else actualDate
+            numeros = re.findall(patron,actualDate)
+            if not numeros:
+                numeros = re.findall(patron2,actualDate)
+            fechaFinal = "/".join(numeros)
+            fechas["muestreo"]=fechaFinal
+            muestreoCounter += 1 
+
+    return fechas
+
+def get_address(file):
+
+    def ignore_words(line):
+        words_to_ignore = [
+            "lugar",
+            "direccion",
+            "dirección",
+            "muestreo",
+            ":",
+            "-",
+            ",",
+            "Unimarc",
+            "inicio"]
+        formated_line = line.lower()
+        formated_line = formated_line.split("fecha")[0]
+        for wti in words_to_ignore:
+
+            formated_line = formated_line.replace(wti.lower(),"")
+
+        return formated_line
+    
+
+    address_lines = get_data_list(file,"store_address")
+    print(address_lines)
+    for al in address_lines:
+        al_formated = ignore_words(al) 
+        print(al_formated)
+        store_data = search_store_id(al_formated)
+        print("store_data: ",store_data)
+        if store_data:
+            return store_data
+
+def _mapping_parametros(tabla,address,dates):
+    # Diccionario que asocia la etiqueta de la tabla con el nombre del atributo en el DTO
+    mapeo_etiquetas = {
+        'Aceites y Grasas': 'aceites_grasas',
+        'DBO5 a 20°C': 'dbo',
+        'Fósforo': 'fosforo',
+        'Nitrógeno Amoniacal': 'nitrogeno_amoniacal',
+        'Poder Espumógeno': 'poder_espumogeno',
+        'Sólidos Sedimentables': 'solidos_sedimentables',
+        'Sólidos Suspendidos Totales': 'solidos_suspendidos_totales',
+        'Aluminio': 'aluminio',
+        'Arsénico': 'arsenico',
+        'Boro': 'boro',
+        'Cadmio': 'cadmio',
+        'Cianuro Total': 'cianuro',
+        'Cinc': 'zinc',
+        'Cobre': 'cobre',
+        'Cromo Hexavalente': 'cromo_hexavalente',
+        'Cromo Total': 'cromo_total',
+        'Hidrocarburos Totales': 'hidrocarburos_totales',
+        'Manganeso': 'manganeso',
+        'Mercurio': 'mercurio',
+        'Níquel': 'niquel',
+        'pH 25°C Laboratorio': 'ph',
+        'Plomo': 'plomo',
+        'Sulfato': 'sulfatos',
+        'Sulfuro Total': 'sulfuros',
+
+    }
+
+    mapeo = AnalisisAguaDTO()
+    
+    # Diccionario temporal para almacenar los valores crudos encontrados en la tabla
+    valores_encontrados = {}
+
+    for fila in tabla:
+        etiqueta = fila[0]
+        if etiqueta in mapeo_etiquetas:
+            valores_encontrados[mapeo_etiquetas[etiqueta]] = fila[3]
+
+    # Asignar los valores procesados al DTO de manera dinámica
+    for atributo, valor in valores_encontrados.items():
+        setattr(mapeo, atributo, full_parsing(valor))
+
+    for atributo, valor in address.items():
+        if hasattr(mapeo, atributo):
+            setattr(mapeo, atributo, valor)
+
+    mapeo.laboratorio = "SGS"
+    mapeo.fecha_muestreo = dates["muestreo"]
+    return mapeo.to_dict()
+
+def sgs_reader(file,lab):
+    table = get_pdf_table(file,lab)
+    address = get_address(file)
+    dates = mapping_sendDate(file)
+    print(dates)
+    results = _mapping_parametros(table,address,dates)
+    print_pdf_results(results)
+    return results
+
+print_pdf_results(sgs_reader("./test pdf/SGS2.pdf","sgs"))
+
+============================================================
+
+=== TÍTULO: tests\pdfClassifier.py ===
+
+import fitz  # PyMuPDF
+import hashlib
+
+def extraer_imagenes_pdf(archivo_pdf):
+    # Abrir el documento PDF
+    doc = fitz.open(archivo_pdf)
+    
+    contador = 0
+    # Recorrer cada página del documento
+    for num_pagina in range(len(doc)):
+        page = doc[num_pagina]
+        
+        # Obtener la lista de todas las imágenes en la página
+        image_list = page.get_images(full=True)
+        
+        print(f"Página {num_pagina + 1}: Se encontraron {len(image_list)} imágenes.")
+        
+        for img_index, img in enumerate(image_list):
+            # Obtener el xref (referencia única de la imagen en el PDF)
+            xref = img[0]
+            
+            # Extraer la información y los bytes de la imagen
+            base_image = doc.extract_image(xref)
+            image_bytes = base_image["image"]
+            image_ext = base_image["ext"]  # Extensión original (png, jpeg, etc.)
+            
+            # Guardar la imagen en el disco
+            nombre_archivo = f"imagen_p{num_pagina + 1}_{img_index + 1}.{image_ext}"
+            with open(nombre_archivo, "wb") as f:
+                f.write(image_bytes)
+                
+            print(f"  -> Guardada: {nombre_archivo}")
+            contador += 1
+
+    print(f"\nExtracción finalizada. Total de imágenes extraídas: {contador}")
+
+
+def calcular_hash_imagen(image_bytes):
+    """Calcula un hash único basado en el contenido binario de la imagen."""
+    return hashlib.md5(image_bytes).hexdigest()
+
+def buscar_imagen_especifica(pdf_path: str, imagen_referencia_path: str) -> bool:
+    """
+    Busca si una imagen específica (por archivo de referencia) 
+    se encuentra incrustada dentro del PDF.
+    """
+    # 1. Leer y calcular el hash de la imagen que quieres buscar
+    try:
+        with open(imagen_referencia_path, "rb") as f:
+            bytes_referencia = f.read()
+        hash_buscado = calcular_hash_imagen(bytes_referencia)
+    except FileNotFoundError:
+        print(f"No se encontró la imagen de referencia en: {imagen_referencia_path}")
+        return False
+
+    # 2. Abrir el PDF y recorrer sus imágenes
+    doc = fitz.open(pdf_path)
+    encontrada = False
+
+    for num_pagina, page in enumerate(doc):
+        image_list = page.get_images(full=True)
+        
+        for img_index, img in enumerate(image_list):
+            xref = img[0]
+            base_image = doc.extract_image(xref)
+            image_bytes = base_image["image"]
+            
+            # Calcular el hash de la imagen actual del PDF
+            hash_actual = calcular_hash_imagen(image_bytes)
+            
+            # Comparar si coinciden
+            if hash_actual == hash_buscado:
+                print(f"¡Imagen encontrada! Está en la página {num_pagina + 1} (Índice de imagen: {img_index + 1})")
+                encontrada = True
+                # Puedes hacer 'break' aquí si solo te interesa saber si al menos existe una vez
+
+    if not encontrada:
+        print("La imagen específica NO se encuentra en este PDF.")
+        
+    return encontrada
+
+# --- EJEMPLO DE USO ---
+buscar_imagen_especifica("SURALIS_2.pdf", "Merieux.png")
+extraer_imagenes_pdf("SURALIS_2.pdf")
+
+============================================================
+
+=== TÍTULO: tests\pdfCounter.py ===
+
+import os
+import fitz  # PyMuPDF
+import pandas as pd
+
+def detalle_pdfs_por_palabra(ruta_carpeta: str, palabras_buscadas: list):
+    total_pdfs = 0
+    # Diccionario para almacenar la lista de archivos por cada palabra
+    resultados_por_palabra = {palabra: [] for palabra in palabras_buscadas}
+    carpetas_premiadas = []
+    palabras_lower = [p.lower() for p in palabras_buscadas]
+
+    # os.walk recorre la carpeta y subcarpetas recursivamente
+    for raiz, _, archivos in os.walk(ruta_carpeta):
+        for archivo in archivos:
+            if archivo.lower().endswith(".pdf"):
+                total_pdfs += 1
+                ruta_completa = os.path.join(raiz, archivo)
+                
+                try:
+                    # Extraer todo el texto del PDF de una sola vez
+                    texto_completo = ""
+                    with fitz.open(ruta_completa) as doc:
+                        for pagina in doc:
+                            t = pagina.get_text()
+                            if t:
+                                texto_completo += t.lower() + "\n"
+                    
+                    # Verificar cada palabra individualmente para este PDF
+                    for palabra_original, palabra_lower in zip(palabras_buscadas, palabras_lower):
+                        if palabra_lower in texto_completo:
+                            resultados_por_palabra[palabra_original].append({
+                                "nombre": archivo,
+                                "ruta": ruta_completa
+                            })
+                            
+                except Exception as e:
+                    print(f"No se pudo leer el archivo {archivo}: {e}")
+                    continue
+
+    print(f"\n--- Resultados Detallados de la Búsqueda ---")
+    print(f"Total de PDFs analizados: {total_pdfs}\n")
+    
+    for palabra, archivos_encontrados in resultados_por_palabra.items():
+        print(f"========================================")
+        print(f"Palabra: '{palabra}' (Aparece en {len(archivos_encontrados)} PDF(s))")
+        print(f"========================================")
+        
+        if archivos_encontrados:
+            for item in archivos_encontrados:
+                print(f" - Archivo: {item['nombre']}")
+                print(f"   Ruta:    {item['ruta']}")
+            rutas_unicas = sorted(list(set(item['ruta'] for item in archivos_encontrados)))
+            
+            for ruta in rutas_unicas:
+                print(f" - Ruta única: {ruta}")
+        else:
+            print(" - (No se encontró en ningún PDF)")
+        print()
+
+def ver_todos_los_metadatos(ruta_carpeta: str):
+    for raiz, _, archivos in os.walk(ruta_carpeta):
+        for archivo in archivos:
+            if archivo.lower().endswith(".pdf"):
+                ruta_completa = os.path.join(raiz, archivo)
+                try:
+                    with fitz.open(ruta_completa) as doc:
+                        print(f"Archivo: {archivo}")
+                        # Imprime todo el diccionario de metadatos del PDF
+                        for clave, valor in doc.metadata.items():
+                            print(f"  {clave}: {valor}")
+                        print("-" * 40)
+                except Exception as e:
+                    print(f"Error en {archivo}: {e}")
+
+def listar_directorio_os(ruta_destino):
+    try:
+        print(f"\n--- Contenido de: {os.path.abspath(ruta_destino)} ---")
+        with os.scandir(ruta_destino) as entradas:
+            for entrada in entradas:
+                if entrada.is_dir():
+                    print(f"📁 [Carpeta]  {entrada.name}")
+                elif entrada.is_file():
+                    print(f"📄 [Archivo]  {entrada.name}")
+    except FileNotFoundError:
+        print(f"Error: No se encontró la ruta '{ruta_destino}'.")
+        
+def exportar_pdfs_por_palabra_a_csv(ruta_carpeta: str, palabras_buscadas: list, nombre_csv: str = "resultados_busqueda.csv"):
+    total_pdfs = 0
+    palabras_lower = [p.lower() for p in palabras_buscadas]
+    
+    # Lista para almacenar los registros planos para el DataFrame
+    registros = []
+
+    # os.walk recorre la carpeta y subcarpetas recursivamente
+    for raiz, _, archivos in os.walk(ruta_carpeta):
+        for archivo in archivos:
+            if archivo.lower().endswith(".pdf"):
+                total_pdfs += 1
+                ruta_completa = os.path.join(raiz, archivo)
+                
+                try:
+                    # Extraer todo el texto del PDF de una sola vez
+                    texto_completo = ""
+                    with fitz.open(ruta_completa) as doc:
+                        for pagina in doc:
+                            t = pagina.get_text()
+                            if t:
+                                texto_completo += t.lower() + "\n"
+                    
+                    # Verificar cada palabra individualmente para este PDF
+                    for palabra_original, palabra_lower in zip(palabras_buscadas, palabras_lower):
+                        if palabra_lower in texto_completo:
+                            registros.append({
+                                "palabra_clave": palabra_original,
+                                "nombre_archivo": archivo,
+                                "ruta": ruta_completa
+                            })
+                            
+                except Exception as e:
+                    print(f"No se pudo leer el archivo {archivo}: {e}")
+                    continue
+
+    print(f"\n--- Proceso Finalizado ---")
+    print(f"Total de PDFs analizados: {total_pdfs}")
+    print(f"Coincidencias encontradas: {len(registros)}")
+
+    # Crear el DataFrame de Pandas y exportar a CSV
+    df = pd.DataFrame(registros)
+    df.to_csv(nombre_csv, index=False, encoding="utf-8-sig")
+    print(f"Archivo CSV guardado exitosamente como: {nombre_csv}")
+
+# --- EJEMPLO DE USO ---
+lista_palabras = ['Food', 'hidrolab', 'anam', 'Société','biodiversa','patagonia','agq']
+path = "C:\\Users\\dquioza\\OneDrive - SMU S.A\\Medio Ambiente - CONTROL DIRECTO\\INFORMES"
+exportar_pdfs_por_palabra_a_csv(path,lista_palabras,"pdfs.csv")
+
+============================================================
+
+=== TÍTULO: utils\binaryUtils.py ===
+
+import pdfplumber
+import json
+
+labKeywordJsonPath = "labKeywords.json"
+
+def getTables(file):
+    with pdfplumber.open(file) as pdf:
+        totalTablas = []
+        for page in pdf.pages:
+            tablas = page.extract_tables()
+            print(page,tablas)
+
+def getLabTableKeyWord(lab):
+    with open(labKeywordJsonPath,"r",encoding="utf-8") as keywordsJson:
+        keyWordsData = json.load(keywordsJson)
+        return keyWordsData[lab]["tabla"]
+
+def buscar_tabla_por_palabra(nombre_archivo: str, palabra_clave: str):
+    try:
+        with pdfplumber.open(nombre_archivo) as pdf:
+            for num_pagina, page in enumerate(pdf.pages):
+                tablas = page.extract_tables()
+                
+                for idx_tabla, tabla in enumerate(tablas):
+                    for fila in tabla:
+                        for celda in fila:
+                            if celda and palabra_clave.lower() in celda.lower():
+                                print(f"¡Encontrada en la Página {num_pagina + 1}, Tabla #{idx_tabla + 1}!")
+                                return tabla
+                                
+        print(f"La palabra '{palabra_clave}' no se encontró en ninguna tabla.")
+        return None
+
+    except FileNotFoundError:
+        print(f"Error: No se encontró el archivo '{nombre_archivo}'. Verifica la ruta.")
+        return None
+    except Exception as e:
+        print(f"Ocurrió un error inesperado al procesar el PDF: {e}")
+        return None
+
+def searchMTBKLab(file,keyword):
+    totalTables = []
+    try:
+        with pdfplumber.open(file) as pdf:
+            for num_pagina, page in enumerate(pdf.pages):
+                tablas = page.extract_tables()
+                
+                for idx_tabla, tabla in enumerate(tablas):
+                    for fila in tabla:
+                        for celda in fila:
+                            if celda and keyword.lower() in celda.lower():
+                                print(f"¡Encontrada en la Página {num_pagina + 1}, Tabla #{idx_tabla + 1}!")
+                                totalTables.append(tabla)
+            return totalTables  
+                                
+        print(f"La palabra '{keyword}' no se encontró en ninguna tabla.")
+        return None
+    
+    except FileNotFoundError:
+        print(f"Error: No se encontró el archivo '{keyword}'. Verifica la ruta.")
+        return None
+    except Exception as e:
+        print(f"Ocurrió un error inesperado al procesar el PDF: {e}")
+        return None
+
+def searchMultipleTableByKeyword(file,lab=None,kw=None):
+    print("searchMultipleTableByKeyword")
+    if lab != None:
+        resultTables = searchMTBKLab(file,getLabTableKeyWord(lab))
+        return resultTables
+    if kw != None:
+        resultTables = searchMTBKLab(file,kw)
+        return resultTables
+
+def mergeTables(tableArray):
+    # Unir Tablas si el pdf trae la misma tabla pero dividida en varias paginas
+    mergedTable = []
+    for table in tableArray:
+        mergedTable+=table
+    return mergedTable
+
+def get_pdf_table(file,lab):
+    sgsKeyword = getLabTableKeyWord(lab)
+    tabla = buscar_tabla_por_palabra(file,sgsKeyword)
+    return tabla
+
+def print_pdf_results(results):
+    for parametro,valor in results.items():
+        print(f"{parametro}: {valor}")
+
+
+============================================================
+
+=== TÍTULO: utils\context.py ===
+
+import os
+
+def respaldar_archivos_especificos(ruta_carpeta: str, archivo_salida: str = "resumen_codigo.txt"):
+    extensiones_validas = (".py", ".json")
+    total_procesados = 0
+
+    # Abrimos el archivo de texto en modo escritura (utf-8 para evitar problemas con tildes o caracteres especiales)
+    with open(archivo_salida, "w", encoding="utf-8") as salida:
+        
+        # os.walk recorre la carpeta y todas sus subcarpetas
+        for raiz, _, archivos in os.walk(ruta_carpeta):
+            for archivo in archivos:
+                # Verificamos si el archivo termina en .py o .json (ignorando mayúsculas/minúsculas)
+                if archivo.lower().endswith(extensiones_validas):
+                    total_procesados += 1
+                    ruta_completa = os.path.join(raiz, archivo)
+                    
+                    # Escribimos los metadatos (nombre y ruta)
+                    salida.write("=" * 80 + "\n")
+                    salida.write(f"NOMBRE ARCHIVO: {archivo}\n")
+                    salida.write(f"RUTA ABSOLUTA : {os.path.abspath(ruta_completa)}\n")
+                    salida.write("=" * 80 + "\n")
+                    
+                    # Intentamos leer y escribir el contenido del archivo de código/configuración
+                    try:
+                        with open(ruta_completa, "r", encoding="utf-8") as f:
+                            contenido = f.read()
+                            salida.write(contenido)
+                    except Exception as e:
+                        salida.write(f"[ERROR AL LEER EL ARCHIVO]: {e}\n")
+                    
+                    # Dejamos un espacio de separación entre archivo y archivo
+                    salida.write("\n\n")
+
+    print(f"\n--- Proceso Finalizado ---")
+    print(f"Se recopilaron {total_procesados} archivos (.py y .json).")
+    print(f"Guardado exitosamente en: {os.path.abspath(archivo_salida)}")
+
+# --- EJEMPLO DE USO ---
+# Reemplaza esta ruta por la carpeta donde tienes tus proyectos
+path_proyecto = r"C:\Users\dquioza\OneDrive - SMU S.A\Escritorio\hola\routes\medioambiente\riles\automatizaciones\lectorPdf"
+respaldar_archivos_especificos(path_proyecto, "archivos_python_json.txt")
+
+============================================================
+
+=== TÍTULO: utils\data_cleaning.py ===
+
+def remove_symbol(val:str):
+  symbols = [">","<"]
+  hasSymbols = any(c in val for c in symbols)
+  if hasSymbols:
+    for s in symbols:
+      if s in val:
+        newVal = val.replace(s,"")
+    return newVal
+  return val
+def replace_thousands_separator(value):
+  if "." in value:
+    return value.replace(".",",")
+  else:
+    return value
+def remove_units(value):
+  invalidCharacters = "mg/LlH"
+  newvalue = ""
+  for i in range(len(value)):
+    if value[i] not in invalidCharacters:
+      newvalue += value[i]
+  return newvalue
+def full_parsing(value):
+  valueWithOutSymbols = remove_symbol(value)
+  valueCommaTS = replace_thousands_separator(valueWithOutSymbols)
+  finalValue = remove_units(valueCommaTS)
+  return finalValue
+
+    
+
+============================================================
+
+=== TÍTULO: utils\dtos.py ===
+
+from dataclasses import dataclass, asdict
+from typing import Optional
+from datetime import datetime
+
+@dataclass
+class AnalisisAguaDTO:
+    empresa: Optional[str] = None
+    local_id:Optional[str] = None
+    local_nombre:Optional[str] = None
+    local_region:Optional[str] = None
+    local_comuna:Optional[str] = None
+    local_direccion:Optional[str] = None
+    local_rpm:Optional[str] = None
+    local_convenio:Optional[str] = None
+    laboratorio:Optional[str] = None
+    fecha_emision: Optional[datetime] = None
+    fecha_muestreo: Optional[datetime] = None
+    tipo_muestreo: Optional[str] = None
+    aceites_grasas: Optional[str] = None
+    ph:Optional[str] = None
+    dbo: Optional[str] = None
+    dqo: Optional[str] = None
+    fosforo: Optional[str] = None
+    nitrogeno_amoniacal: Optional[str] = None
+    poder_espumogeno: Optional[str] = None
+    solidos_sedimentables: Optional[str] = None
+    solidos_suspendidos_totales: Optional[str] = None
+    volumen_de_descarga_diaria: Optional[str] = None
+    volumen_de_descarga_mensual: Optional[str] = None
+    aluminio: Optional[str] = None
+    arsenico: Optional[str] = None
+    boro: Optional[str] = None
+    cadmio: Optional[str] = None
+    cianuro: Optional[str] = None
+    zinc: Optional[str] = None
+    cobre: Optional[str] = None
+    cromo_total: Optional[str] = None
+    cromo_hexavalente: Optional[str] = None
+    hidrocarburos_totales: Optional[str] = None
+    manganeso: Optional[str] = None
+    mercurio: Optional[str] = None
+    niquel: Optional[str] = None
+    plomo: Optional[str] = None
+    sulfatos: Optional[str] = None
+    sulfuros: Optional[str] = None
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+        
+
+============================================================
+
+=== TÍTULO: utils\models.py ===
+
+import pandas as pd
+from thefuzz import process, fuzz
+from config import LOCALES_CSV
+
+def search_store_id(direccion_ingresada, limite_confianza=60):
+
+    dataframe = pd.read_csv(LOCALES_CSV,sep=';')
+    
+    resultado = process.extractOne(
+        direccion_ingresada, 
+        dataframe['DIRECCIÓN'], 
+        scorer=fuzz.token_sort_ratio
+    )
+    
+    if not resultado:
+        return "No se encontraron coincidencias."
+        
+    mejor_coincidencia, score, indice = resultado
+
+    if score >= limite_confianza:
+        local_id = dataframe.loc[indice, 'ID_LOCAL']
+        local_region = dataframe.loc[indice, 'REGIÓN']
+        local_comuna = dataframe.loc[indice, 'COMUNA']
+        local_nombre = dataframe.loc[indice, 'LOCAL']
+        local_rpm = int(dataframe.loc[indice, 'RPM'])
+        empresa = dataframe.loc[indice, 'EMPRESA DISTRIBUIDORA']
+        estado_local = dataframe.loc[indice, 'ESTADO']
+        local_convenio = dataframe.loc[indice, 'CONVENIO']
+        formato_local = dataframe.loc[indice, 'FORMATO']
+
+        return {
+            'similitud': score,
+            'local_id': local_id,
+            'local_nombre':local_nombre,
+            'local_comuna':local_comuna,
+            'local_region':local_region,
+            'local_direccion': mejor_coincidencia,
+            'local_rpm':local_rpm,
+            'empresa':empresa,
+            'estado_local':estado_local,
+            'local_convenio':local_convenio,
+            'formato_local':formato_local
+        }
+    else:
+        return f"{direccion_ingresada} | {score}%"
+
+
+# usuario_input = "Nicaragua"
+# resultado_busqueda = search_store_id(usuario_input)
+
+# print(resultado_busqueda)
+
+============================================================
+
+=== TÍTULO: utils\testUtils.py ===
+
+import json
+
+labKeywordJsonPath = "labKeywords.json"
+
+def a(lab):
+    # Usamos 'utf-8-sig' para evitar errores por caracteres ocultos (BOM)
+    with open(labKeywordJsonPath, "r", encoding="utf-8-sig") as keywordsJson:
+        keyWordsData = json.load(keywordsJson)
+        return keyWordsData[lab]['tabla']
+
+print(a("biodiversa"))
+
+============================================================
+
+=== TÍTULO: utils\utils.py ===
+
+from collections import Counter
+import json
+from pathlib import Path
+import re
+import unicodedata
+import pdfplumber
+from config import LAB_KEYWORDS_FILE, DATA_KEYWORDS_FILE
+
+def get_tables(file_path):
+    with pdfplumber.open(file_path) as pdf:
+        total_tables = []
+        for page in pdf.pages:
+            tables = page.extract_tables()
+
+
+def get_lab_table_keyword(lab):
+    with open(LAB_KEYWORDS_FILE, "r", encoding="utf-8") as keywords_json:
+        keywords_data = json.load(keywords_json)
+        return keywords_data[lab]["tabla"]
+
+# se obtienen las palabras clave desde un Json, usadas para buscar lineas específicas.
+def get_data_keywords(data:str):
+    with open(DATA_KEYWORDS_FILE, "r", encoding="utf-8") as dates_file:
+        date_keywords_data = json.load(dates_file)
+        return date_keywords_data[data]
+
+
+def search_table_by_words(file_path: str, keyword: str):
+    try:
+        with pdfplumber.open(file_path) as pdf:
+            for page_number, page in enumerate(pdf.pages):
+                tables = page.extract_tables()
+
+                for table_index, table in enumerate(tables):
+                    for row in table:
+                        for cell in row:
+                            if cell and keyword.lower() in cell.lower():
+                                print(
+                                    f"Found on Page {page_number + 1}, Table #{table_index + 1}!"
+                                )
+                                return table
+
+        print(f"The keyword '{keyword}' was not found in any table.")
+        return None
+
+    except FileNotFoundError:
+        print(f"Error: The file '{file_path}' was not found. Verify the path.")
+        return None
+    except Exception as e:
+        print(f"An unexpected error occurred while processing the PDF: {e}")
+        return None
+
+
+def search_multiple_tables_by_keyword_lab(file_path, keyword):
+    total_tables = []
+    try:
+        with pdfplumber.open(file_path) as pdf:
+            for page_number, page in enumerate(pdf.pages):
+                tables = page.extract_tables()
+
+                for table_index, table in enumerate(tables):
+                    for row in table:
+                        for cell in row:
+                            if cell and keyword.lower() in cell.lower():
+                                print(
+                                    f"Found on Page {page_number + 1}, Table #{table_index + 1}!"
+                                )
+                                total_tables.append(table)
+            return total_tables
+
+        print(f"The keyword '{keyword}' was not found in any table.")
+        return None
+
+    except FileNotFoundError:
+        print(f"Error: The file '{file_path}' was not found. Verify the path.")
+        return None
+    except Exception as e:
+        print(f"An unexpected error occurred while processing the PDF: {e}")
+        return None
+
+
+def search_multiple_tables_by_keyword(file_path, lab=None, kw=None):
+    print("search_multiple_tables_by_keyword")
+    if lab is not None:
+        result_tables = search_multiple_tables_by_keyword_lab(
+            file_path, get_lab_table_keyword(lab)
+        )
+        return result_tables
+    if kw is not None:
+        result_tables = search_multiple_tables_by_keyword_lab(file_path, kw)
+        return result_tables
+
+
+def merge_tables(table_array):
+    # Merge tables if the PDF contains the same table split across multiple pages
+    merged_table = []
+    for table in table_array:
+        merged_table += table
+    return merged_table
+
+
+def get_pdf_table(file_path, lab):
+    sgs_keyword = get_lab_table_keyword(lab)
+    table = search_table_by_words(file_path, sgs_keyword)
+    return table
+
+
+def print_pdf_results(results):
+    for parameter, value in results.items():
+        print(f"{parameter}: {value}")
+
+
+def get_creation_date(pdf_path):
+    with pdfplumber.open(pdf_path) as pdf:
+        metadata = pdf.metadata
+        creation_date = metadata.get("CreationDate")
+        return creation_date
+
+
+def extract_text_in_lines(file_path):
+    with pdfplumber.open(file_path) as pdf:
+        total_lines = []
+        for page in pdf.pages:
+            page_text = page.extract_text()
+            lines = page_text.splitlines()
+            for line in lines:
+                total_lines.append(line)
+        return total_lines
+
+
+def extract_lines_by_text(file_path, substring):
+    with pdfplumber.open(file_path) as pdf:
+        total_lines = []
+        for page in pdf.pages:
+            page_text = page.extract_text()
+            lines = page_text.splitlines()
+            for line in lines:
+                if line.find(substring) > 0:
+                    total_lines.append(line)
+
+            print(total_lines)
+            return total_lines
+
+
+def get_data_list(file_path,search):
+    text = extract_text_in_lines(file_path)
+    data_keywords = get_data_keywords(search)
+    data_lines = []
+    for line in text:
+        if any(kw.lower() in line.lower() for kw in data_keywords):
+            data_lines.append(line)
+    return data_lines
+
+
+
+
+def word_analysis(text_list):
+    text = ""
+    for item in text_list:
+        text += item
+        text += " "
+    normalized_text = unicodedata.normalize("NFKD", text)
+
+    text_without_accents = "".join(
+        c for c in normalized_text if unicodedata.category(c) != "Mn"
+    )
+    text_without_numbers = re.sub(r"\d+", "", text_without_accents)
+    formatted_text = text_without_numbers.lower()
+    words = re.findall(r"\w+", formatted_text)
+    counter = Counter(words)
+    most_common = counter.most_common(10)
+    for item in most_common:
+        print(item[0], item[1])
+
+
+
+============================================================
+

@@ -1,0 +1,105 @@
+@import url('./variables.css');
+
+.docsLayout {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  width: 100%;
+  height: 100%; 
+  max-height: calc(100vh - 120px);
+  overflow: hidden;
+  background: var(--color-foreground);
+  border-radius: 8px;
+}
+
+.docsNavBar {
+  display: grid;
+  grid-template-rows: 50px 1fr;
+  height: 100%;
+  overflow: hidden;
+  border-right: 1px solid var(--color-borders);
+}
+
+.docsNavBar h3 {
+  display: flex;
+  align-items: center;
+  padding-left: 12px;
+  border-bottom: dashed 1px;
+  border-color: var(--color-borders);
+  margin: 0;
+}
+
+/* Contenedor principal del menú y submenús (adiós a los puntos/círculos) */
+.docsNavBar ul,
+.docsNavBar .docs-menu,
+.docsNavBar .docs-category ul {
+  margin: 0;
+  padding: 0;
+  list-style: none !important; /* Elimina rotundamente cualquier círculo o viñeta */
+}
+
+.docsNavBar .docs-menu {
+  overflow-y: auto;
+  overflow-x: hidden;
+  height: 100%;
+}
+
+/* Estilo para los títulos de las carpetas/categorías */
+.docsNavBar .category-title {
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding-left: 16px;
+  font-weight: bold;
+  font-size: 0.95rem;
+  opacity: 0.8;
+  background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Estilos de los enlaces de los archivos .md dentro de sus categorías */
+.docsNavBar li li a {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 45px;
+  padding-left: 32px; /* Un poco más de sangría para que se note la jerarquía */
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.docsNavBar li li a:hover {
+  padding-left: 40px;
+  background-color: var(--color-background);
+}
+
+.docsContent {
+  grid-column: 2;
+  min-width: 0;
+  height: 100%;
+  max-height: 100%;
+  padding: 2rem;
+  overflow-y: auto; 
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+.docsContent.markdown-body{
+  background-color: var(--color-foreground) !important;
+}
+.docsContent .markdown-body img {
+  max-width: 100%;
+  height: auto;
+}
+.mermaid{
+  display: flex;
+  justify-content: center;
+  background-color: var(--color-foreground) !important;
+  border-radius: 4px;
+  border: solid 1px var(--color-borders);
+  width: 100%;
+  min-width: 20%;
+  max-width: 100%;
+  place-self: center;
+}
+.edgeLabel{
+  background-color: var(--color-foreground);
+}

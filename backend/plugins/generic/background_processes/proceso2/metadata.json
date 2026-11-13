@@ -1,0 +1,9 @@
+{
+  "id": "not_auto",
+  "name": "Notificación Automática Programable",
+  "description": "Muestra una notificación en Windows cada 60 segundos.",
+  "category": "sistema",
+  "version": "1.0.0",
+  "entry_point": "worker.py",
+  "enabled": false
+}

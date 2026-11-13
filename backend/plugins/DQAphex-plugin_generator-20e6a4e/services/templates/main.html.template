@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+  <link rel="stylesheet" href="{{ url_for('__STATIC_MOUNT__', path='styles/main.css') }}">
+{% endblock %}
+
+{% block content %}
+    <div class="__PLUGIN_NAME_LOWER__-container">
+    </div>
+{% endblock %}

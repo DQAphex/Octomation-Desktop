@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+{% block extra_css %}
+  <link rel="stylesheet" href="{{ url_for('static_medioambiente_riles', path='styles/main.css') }}">
+{% endblock %}
+{% block content %}
+<div class="riles-container">
+  <div class="title-filter">
+    <div class="title">
+      <h2>Gestión de Riles</h2>
+    </div>
+    <div class="list nav-bar">
+      <a href="/medioambiente/riles/" class="nav">
+        <span class="material-symbols-outlined mi-icono">home</span>
+        Inicio
+      </a>
+      <a href="/medioambiente/riles/inbox" class="nav">
+        <span class="material-symbols-outlined mi-icono">inbox</span>
+        Inbox
+      </a>
+      <a href="/medioambiente/riles/upload" class="nav">
+        <span class="material-symbols-outlined mi-icono">search</span>
+        Subir
+      </a>
+      <a href="/medioambiente/riles/send-mails" class="nav">
+        <span class="material-symbols-outlined mi-icono">send</span>
+        Enviar Correos
+      </a>
+      <a href="/medioambiente/riles/store-list" class="nav">
+        <span class="material-symbols-outlined mi-icono">storefront</span>
+        Lista de locales
+      </a>
+      <a href="/medioambiente/riles/parameter-limits" class="nav">
+        <span class="material-symbols-outlined mi-icono">widget_width</span>
+        Parámetros
+      </a>
+      <a href="/medioambiente/riles/data" class="nav">
+        <span class="material-symbols-outlined mi-icono">database</span>
+        Editar Datos de aplicación
+      </a>
+    </div>
+  </div>
+  <div class="Automation-list">
+    <div class="title">
+      <h2>Lista de Locales</h2>
+    </div>
+    <div class="list Automation-item-list">
+      {% for local in locales %}
+        <div class="item">
+          <div class="item-title">
+            <p>
+              Local {{ local.id_local }} - {{ local.local_nombre }} - <span class="item-records">{{ local.total_registros }}</span>
+            </p>
+            <div class="item-button">
+              <a href="/medioambiente/riles/historico?local={{ local.id_local }}" class="button">
+                <span class="material-symbols-outlined mi-icono">dashboard</span>
+                Histórico
+              </a>
+            </div>
+            <div class="item-button">
+              <button 
+                class="btn-expandir" 
+                data-store-id="{{ local.id_local }}" 
+                onclick="toggleDetails(this)"
+              >
+                <span class="material-symbols-outlined mi-icono">open_in_full</span>
+                <p class="btn-label" style="font-size: 1rem;">Expandir</p>
+              </button>
+            </div>
+          </div>
+          <div class="item-details">
+            <!-- Aquí se cargarán los datos del PDF -->
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<script>
+  async function sendMailing(analysisId, recipientType) {
+    try {
+      const response = await fetch(`/medioambiente/riles/api/v1/send-analysis-mailing?analysis_id=${analysisId}&type=${recipientType}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al enviar el correo');
+      }
+
+      alert(`Correo enviado exitosamente a ${recipientType}`);
+    } catch (error) {
+      console.error(error);
+      alert(`No se pudo enviar el correo a ${recipientType}`);
+    }
+  }
+
+  async function toggleDetails(button) {
+    const itemContainer = button.closest('.item');
+    const detailsDiv = itemContainer.querySelector('.item-details');
+    const storeId = button.getAttribute('data-store-id');
+
+    if (detailsDiv.classList.contains('show')) {
+      detailsDiv.classList.remove('show');
+      button.querySelector('.mi-icono').textContent = 'open_in_full';
+      button.querySelector('.btn-label').textContent = 'Expandir';
+      return;
+    }
+
+    if (!detailsDiv.dataset.loaded) {
+      detailsDiv.innerHTML = '<p>Cargando información...</p>';
+      detailsDiv.classList.add('show');
+
+      try {
+        const pdfDataByIdResponse = await fetch(`/medioambiente/riles/api/v1/get-pdf-data-by-store?store_id=${storeId}`);
+
+        if (!pdfDataByIdResponse.ok) {
+          throw new Error('Error al consultar la API de PDF');
+        }
+
+        const data = await pdfDataByIdResponse.json();
+
+        // Limpiar mensaje de carga antes de insertar elementos
+        detailsDiv.innerHTML = '';
+
+        if (Array.isArray(data)) {
+          const itemsHtml = await Promise.all(data.map(async (element, index) => {
+            const analisys_id = element.id;
+            const [mailingResponse, toleranceResponse] = await Promise.all([
+              fetch(`/medioambiente/riles/api/v1/get-mailing-queue?analysis_id=${analisys_id}`),
+              fetch(`/medioambiente/riles/api/v1/tolerance?analysis_id=${analisys_id}`)
+            ]);
+
+            const fecha_muestreo = new Date(element.fecha_muestreo);
+            const mailingData = await mailingResponse.json();
+            const toleranceData = await toleranceResponse.json();
+            const dateOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+
+            // Extraer valores con respaldo seguro
+            const analysisType = element.tipo_monitoreo;
+            const status_localVal = mailingData[0]?.status_local ?? 'ENVIADO';
+            const status_sanitariaVal = mailingData[0]?.status_sanitaria ?? 'ENVIADO';
+            const tolerableVal = toleranceData[0]?.tolerable ?? 'N/A';
+            
+            let analysisTypeBadge = `
+              <div class="badge analysis_item_type">
+                <div class="icon">
+                  <span class="material-symbols-outlined mi-icono">experiment</span>
+                </div>
+                <div class="info">
+                  <div class="label">Tipo de Monitoreo:</div>
+                  ${analysisType}
+                </div>
+              </div>
+            `;
+
+            if (analysisType === "CONTROL DIRECTO") {
+              analysisTypeBadge = `
+                <div class="badge analysis_item_type direct"> 
+                  <div class="icon">
+                    <span class="material-symbols-outlined mi-icono">bubble</span>
+                  </div>
+                  <div class="info">
+                    <div class="label">Tipo de Monitoreo:</div>
+                    ${analysisType}
+                  </div>
+                </div>
+              `;
+            }
+
+            let localMailingStatus = `
+              <div class="badge analysis_item_mail_status"> 
+                <div class="icon">
+                  <span class="material-symbols-outlined mi-icono">mark_email_read</span>
+                </div>
+                <div class="info">
+                  <div class="label">Estado Envío a Local:</div>
+                  ${status_localVal}
+                </div>
+              </div>
+            `;
+
+            if (status_localVal === "pendiente de envio") {
+              localMailingStatus = `
+                <div class="badge analysis_item_mail_status pending"> 
+                  <div class="icon">
+                    <span class="material-symbols-outlined mi-icono">mail_off</span>
+                  </div>
+                  <div class="info">
+                    <div class="label">Estado Envío a Local:</div>
+                    Pendiente
+                  </div>
+                </div>
+              `;
+            }
+
+            let sanitariaMailingStatus = `
+              <div class="badge analysis_item_mail_status"> 
+                <div class="icon">
+                  <span class="material-symbols-outlined mi-icono">mark_email_read</span>
+                </div>
+                <div class="info">
+                  <div class="label">Estado Envío a Sanitaria:</div>
+                  ${status_sanitariaVal}
+                </div>
+              </div>
+            `;
+
+            if (status_sanitariaVal === "pendiente de envio") {
+              sanitariaMailingStatus = `
+                <div class="badge analysis_item_mail_status pending"> 
+                  <div class="icon">
+                    <span class="material-symbols-outlined mi-icono">mail_off</span>
+                  </div>
+                  <div class="info">
+                    <div class="label">Estado Envío a Sanitaria:</div>
+                    Pendiente
+                  </div>
+                </div>
+              `;
+            }
+
+            let toleranceStatus = `
+              <div class="badge analysis_item_range"> 
+                <div class="icon">
+                  <span class="material-symbols-outlined mi-icono">check</span>
+                </div>
+                <div class="info">
+                  <div class="label">Cumple con DS.609:</div>
+                  Cumple
+                </div>
+              </div>
+            `;
+            if (toleranceData[0]?.parametros_tolerables?.length > 0){
+              toleranceStatus = `
+                <div class="badge analysis_item_range mildly_outofrange"> 
+                  <div class="icon">
+                    <span class="material-symbols-outlined mi-icono">priority_high</span>
+                  </div>
+                  <div class="info">
+                    <div class="label">Cumple con DS.609:</div>
+                    Cumple, parámetros sobre Máximo (${toleranceData[0].parametros_tolerables.length})
+                  </div>
+                </div>
+              `;
+            }
+            if (tolerableVal === false) {
+              toleranceStatus = `
+                <div class="badge analysis_item_range outofrange">
+                  <div class="icon">
+                    <span class="material-symbols-outlined mi-icono">warning</span>
+                  </div>
+                  <div class="info">
+                    <div class="label">Cumple con DS.609:</div>
+                    No Cumple, parámetros extremadamente altos (${toleranceData[0]?.parametros_extremos?.length ?? 0})
+                  </div>
+                </div>
+              `;
+            }
+
+            return `
+              <div class="analysis_item">
+                <div class="analysis_item_title"> 
+                  <strong>${index + 1} - ${fecha_muestreo.toLocaleDateString('es-ES', dateOptions).toUpperCase()}</strong>
+                </div>
+                <div class="analysis_item_badges">
+                  ${analysisTypeBadge}
+                  ${localMailingStatus}
+                  ${sanitariaMailingStatus}
+                  ${toleranceStatus}
+                </div>
+                <div class="analysis_item_mail_buttons">
+                  <button data-analysis-id="${element.id}" class="local" type="button" onclick="sendMailing(${element.id}, 'local')">Enviar a Local</button>
+                  <button data-analysis-id="${element.id}" class="sanitaria" type="button" onclick="sendMailing(${element.id}, 'sanitaria')">Enviar a Sanitaria</button>
+                </div>
+              </div>
+            `;
+          }));
+
+          detailsDiv.innerHTML = itemsHtml.join('');
+        }
+
+        detailsDiv.dataset.loaded = 'true';
+      } catch (error) {
+        detailsDiv.innerHTML = `<p style="color: red;">Ocurrió un error al cargar los datos.</p>`;
+      }
+    } else {
+      detailsDiv.classList.add('show');
+    }
+
+    button.querySelector('.btn-label').textContent = 'Contraer';
+    button.querySelector('.mi-icono').textContent = 'close_fullscreen';
+  }
+</script>
+{% endblock %}

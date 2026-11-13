@@ -1,0 +1,14 @@
+@import url('../variables.css');
+
+.no_desperdicio_alimentos-container {
+  display: grid;
+  grid-template-columns: 1fr 3fr;
+  grid-template-rows: 1fr;
+  width: 100%;
+  height: 100%; 
+  max-height: calc(100vh - 120px);
+  overflow: hidden;
+  background: var(--color-foreground);
+  border-radius: 8px;
+  position: relative;
+}

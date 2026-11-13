@@ -1,0 +1,535 @@
+{% extends "base.html" %}
+
+{% block extra_css %}
+  <link rel="stylesheet" href="{{ url_for('static_global', path='style/background_processes/page.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="automatizaciones-container">
+  <h1>{{ titulo }}</h1>
+
+  <div class="categoria-box">
+    <ul>
+      {% for clave, proceso in procesos.items() %}
+        <li class="proceso-item" data-id="{{ proceso.metadata.id }}" style="cursor: pointer;">
+          <div class="proceso-info">
+            <div class="proceso-header">
+              <strong>{{ proceso.metadata.name }}</strong>
+            </div>
+
+            {% if proceso.metadata.description %}
+              <p class="desc">{{ proceso.metadata.description }}</p>
+            {% endif %}
+
+            <div class="badges">
+              <span class="badge badge-version">v{{ proceso.metadata.version }}</span>
+              <span class="badge badge-categoria">{{ proceso.metadata.category }}</span>
+              <span class="badge badge-status" id="badge-{{ proceso.metadata.id }}">
+                {% if proceso.metadata.enabled %}Activo{% else %}Inactivo{% endif %}
+              </span>
+              <button onclick="ejecutarProceso('{{ proceso.metadata.id }}')">
+                Ejecutar ahora
+              </button>
+              <script>
+                async function ejecutarProceso(processId) {
+                  try {
+                    const response = await fetch(`/background-process/run/${encodeURIComponent(processId)}`, {
+                      method: "POST"
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                      throw new Error(data.detail || "Error ejecutando el proceso.");
+                    }
+
+                    console.log(data);
+                    alert("Proceso ejecutado correctamente.");
+                  } catch (error) {
+                    console.error(error);
+                    alert(error.message);
+                  }
+                }
+              </script>
+            </div>
+          </div>
+
+          <div class="proceso-control">
+            <label class="switch">
+              <input type="checkbox" class="toggle-process" data-id="{{ proceso.metadata.id }}" {% if proceso.metadata.enabled %}checked{% endif %}>
+              <span class="slider round"></span>
+            </label>
+          </div>
+        </li>
+      {% endfor %}
+    </ul>
+
+    <div class="test">
+      <p>Selecciona un proceso para ver y gestionar sus horarios y opciones.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const switches = document.querySelectorAll(".toggle-process");
+  const procesoInfos = document.querySelectorAll(".proceso-info");
+  const testContainer = document.querySelector(".test");
+  let procesoActualId = null;
+
+  switches.forEach(checkbox => {
+    checkbox.addEventListener("change", async event => {
+      event.stopPropagation();
+      const processId = event.target.getAttribute("data-id");
+      const isChecked = event.target.checked;
+      const badge = document.getElementById(`badge-${processId}`);
+      event.target.disabled = true;
+
+      try {
+        const response = await fetch(`/background-process-schedule/${processId}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" }
+        });
+        if (!response.ok) throw new Error("No se pudo actualizar el estado.");
+        const data = await response.json();
+        event.target.checked = data.enabled;
+        if (badge) badge.textContent = data.enabled ? "Activo" : "Inactivo";
+      } catch (error) {
+        console.error("Error al cambiar estado:", error);
+        event.target.checked = !isChecked;
+        alert("Ocurrio un error al cambiar el estado.");
+      } finally {
+        event.target.disabled = false;
+      }
+    });
+  });
+
+  procesoInfos.forEach(info => {
+    info.addEventListener("click", async () => {
+      const procesoItem = info.closest(".proceso-item");
+      if (!procesoItem) return;
+      const processId = procesoItem.getAttribute("data-id");
+      await cargarHorariosProcess(processId);
+    });
+  });
+
+  async function cargarHorariosProcess(processId) {
+    procesoActualId = processId;
+    testContainer.innerHTML = "<p>Cargando información...</p>";
+
+    try {
+      const response = await fetch(`/background-process-schedule/${processId}`);
+      if (!response.ok) throw new Error("Error al obtener información del proceso.");
+      const data = await response.json();
+      renderizarSeccionProceso(data);
+    } catch (error) {
+      console.error(error);
+      testContainer.innerHTML = `<p style="color: red;">Error al cargar datos del proceso ${processId}</p>`;
+    }
+  }
+
+  function renderizarSeccionProceso(procesoData) {
+    const processId = procesoData.id;
+    const schedules = procesoData.schedules || [];
+    const options = procesoData.options || [];
+
+    let html = `
+      <div class="process-config-wrapper">
+        <div class="schedules-section">
+          <h3>Horarios para: ${escapeHtml(procesoData.name)}</h3>
+          <div class="add-schedule-box">
+            <h4>Agregar nuevo horario</h4>
+            <form id="form-add-schedule" data-id="${processId}">
+              <input type="number" id="new-hour" min="0" max="23" placeholder="Hora (0-23)" required>
+              <input type="number" id="new-minute" min="0" max="59" placeholder="Minuto (0-59)" required>
+              <button type="submit">Agregar Horario</button>
+            </form>
+          </div>
+          <h4>Horarios Programados</h4>
+    `;
+
+    if (schedules.length === 0) {
+      html += `<p>No hay horarios configurados para este proceso.</p>`;
+    } else {
+      html += `<ul class="schedules-list">`;
+
+      schedules.forEach(sched => {
+        html += `
+          <li class="schedule-item">
+            <form class="form-edit-schedule" data-schedule-id="${sched.id}" data-process-id="${processId}">
+              <input type="number" class="edit-hour" min="0" max="23" value="${sched.hour}" required>
+              :
+              <input type="number" class="edit-minute" min="0" max="59" value="${sched.minute}" required>
+              <button type="submit">Guardar</button>
+              <button type="button" class="btn-delete-schedule" data-schedule-id="${sched.id}">Eliminar</button>
+            </form>
+          </li>
+        `;
+      });
+
+      html += `</ul>`;
+    }
+
+    html += `
+        </div>
+        <div class="options-section">
+          <div class="options-header">
+            <h2>Opciones</h2>
+          </div>
+    `;
+
+    if (options.length === 0) {
+      html += `<p>Este proceso no necesita configuraciones.</p>`;
+    } else {
+      options.forEach(option => {
+        types = {
+          "string" : {"type_icon":"text_fields","type_desc":"Texto"},
+          "integer" : {"type_icon":"123","type_desc":"Número"},
+          "folder_path" : {"type_icon":"folder","type_desc":"Ruta de Carpeta"}
+        }
+        const optionType = option.option_type
+        
+        console.log(option.multiple)
+        html += `
+          <div class="option-item" data-option-id="${option.id}">
+            <div class="option-header">
+              <div class="option-header-name">
+                <strong><span class="material-symbols-outlined">settings</span> Nombre de la opción</strong>
+                <p class="option-key">${escapeHtml(option.name)}</p>
+                <small class="option-key"> id: ${escapeHtml(option.key)} </small>
+              </div>
+            </div>
+
+            <div class="option-definition">
+              <label>
+                <strong><span class="material-symbols-outlined">workspaces</span> Acepta multiples valores </strong>
+                <p class="option-description"><span class="material-symbols-outlined">${option.multiple ? "check" : "close"}</span>${escapeHtml(option.multiple ? "Acepta" : "No Acepta")}</p>
+              </label>
+              <label>
+                <strong><span class="material-symbols-outlined">description</span>Descripción</strong>
+                <p class="option-description">${escapeHtml(option.description || "")}</p>
+              </label>
+              <label>
+                <strong><span class="material-symbols-outlined">category</span>Tipo de dato</strong>
+                <p class="option-description"><span class="material-symbols-outlined">${types[optionType]["type_icon"]}</span>${escapeHtml(types[optionType]["type_desc"] || "")}</p>
+              </label>
+            </div>
+
+            <div class="option-values">
+              <div class="values-header">
+                <h4>Valores</h4>
+                <button type="button" class="btn-primary btn-add-option-value" data-option-id="${option.id}" data-multiple="${option.multiple}">
+                  <span class="material-symbols-outlined">
+                    add
+                  </span>
+                  Agregar valor
+                </button>
+              </div>
+              <div class="values-container">
+        `;
+
+        if (!option.values || option.values.length === 0) {
+          html += `<p class="empty-values">No hay valores configurados.</p>`;
+        } else {
+          option.values.forEach(value => {
+            html += `
+              <div class="option-value" data-value-id="${value.id}">
+                <input type="${obtenerInputType(option.option_type)}" class="value-input" value="${escapeHtml(value.value)}">
+                <button type="button" class="btn-secondary btn-save-value" data-value-id="${value.id}">Guardar</button>
+                <button type="button" class="btn-danger btn-delete-value" data-value-id="${value.id}">Eliminar</button>
+              </div>
+            `;
+          });
+        }
+
+        html += `
+              </div>
+            </div>
+          </div>
+        `;
+      });
+    }
+
+    html += `
+        </div>
+      </div>
+    `;
+
+    testContainer.innerHTML = html;
+    asignarEventosSchedules(processId);
+    asignarEventosOptions();
+  }
+
+  function obtenerInputType(optionType) {
+    if (optionType === "integer" || optionType === "float") return "number";
+    return "text";
+  }
+
+  function asignarEventosSchedules(processId) {
+    const addForm = document.getElementById("form-add-schedule");
+
+    if (addForm) {
+      addForm.addEventListener("submit", async e => {
+        e.preventDefault();
+        const hour = parseInt(document.getElementById("new-hour").value);
+        const minute = parseInt(document.getElementById("new-minute").value);
+
+        try {
+          const res = await fetch(`/background-process-schedule/${processId}/add`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ hour, minute })
+          });
+
+          if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Error al agregar horario");
+          }
+
+          await cargarHorariosProcess(processId);
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+    }
+
+    document.querySelectorAll(".form-edit-schedule").forEach(form => {
+      form.addEventListener("submit", async e => {
+        e.preventDefault();
+
+        const scheduleId = form.getAttribute("data-schedule-id");
+        const hour = parseInt(form.querySelector(".edit-hour").value);
+        const minute = parseInt(form.querySelector(".edit-minute").value);
+
+        try {
+          const res = await fetch(`/background-process-schedule/item/${scheduleId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ hour, minute })
+          });
+
+          if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Error al actualizar horario");
+          }
+
+          await cargarHorariosProcess(processId);
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+    });
+
+    document.querySelectorAll(".btn-delete-schedule").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        if (!confirm("¿Deseas eliminar este horario?")) return;
+
+        const scheduleId = btn.getAttribute("data-schedule-id");
+
+        try {
+          const res = await fetch(`/background-process-schedule/item/${scheduleId}`, { method: "DELETE" });
+
+          if (!res.ok) {
+            const err = await res.json();
+            throw new Error(err.detail || "Error al eliminar horario");
+          }
+
+          await cargarHorariosProcess(processId);
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+    });
+  }
+
+  function asignarEventosOptions() {
+    const addOptionButton = document.getElementById("btn-add-option");
+
+    if (addOptionButton) {
+      addOptionButton.addEventListener("click", agregarOpcion);
+    }
+
+    document.querySelectorAll(".btn-save-option").forEach(button => {
+      button.addEventListener("click", async () => {
+        const optionId = button.getAttribute("data-option-id");
+        const optionElement = document.querySelector(`.option-item[data-option-id="${optionId}"]`);
+
+        const name = optionElement.querySelector(".option-name").value.trim();
+        const description = optionElement.querySelector(".option-description").value.trim();
+        const optionType = optionElement.querySelector(".option-type").value;
+        const multiple = optionElement.querySelector(".option-multiple").checked;
+
+        if (!name) {
+          alert("El nombre de la opción es obligatorio.");
+          return;
+        }
+
+        try {
+          const response = await fetch(`/background-process-options/${encodeURIComponent(optionId)}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name, description: description || null, option_type: optionType, multiple })
+          });
+
+          const data = await response.json();
+          if (!response.ok || data.error) throw new Error(data.error || "Error al actualizar opción.");
+
+          await cargarHorariosProcess(procesoActualId);
+        } catch (error) {
+          console.error(error);
+          alert(error.message);
+        }
+      });
+    });
+
+    document.querySelectorAll(".btn-add-option-value").forEach(button => {
+      button.addEventListener("click", async () => {
+        const optionId = button.getAttribute("data-option-id");
+        const multiple = button.getAttribute("data-multiple") === "true";
+        const optionElement = document.querySelector(`.option-item[data-option-id="${optionId}"]`);
+        const values = optionElement.querySelectorAll(".option-value");
+
+        if (!multiple && values.length >= 1) {
+          alert("Esta opción no permite múltiples valores.");
+          return;
+        }
+
+        const value = prompt("Ingresa el nuevo valor:");
+        if (value === null || !value.trim()) return;
+
+        try {
+          const response = await fetch(`/background-process-option-values?option_id=${encodeURIComponent(optionId)}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ value: value.trim() })
+          });
+
+          const data = await response.json();
+          if (!response.ok || data.error) throw new Error(data.error || "Error al agregar valor.");
+
+          await cargarHorariosProcess(procesoActualId);
+        } catch (error) {
+          console.error(error);
+          alert(error.message);
+        }
+      });
+    });
+
+    document.querySelectorAll(".btn-save-value").forEach(button => {
+      button.addEventListener("click", async () => {
+        const valueId = button.getAttribute("data-value-id");
+        const valueElement = document.querySelector(`.option-value[data-value-id="${valueId}"]`);
+        const value = valueElement.querySelector(".value-input").value.trim();
+
+        if (!value) {
+          alert("El valor no puede estar vacío.");
+          return;
+        }
+
+        try {
+          const response = await fetch(`/background-process-option-values/${valueId}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ value })
+          });
+
+          const data = await response.json();
+          if (!response.ok || data.error) throw new Error(data.error || "Error al actualizar valor.");
+
+          await cargarHorariosProcess(procesoActualId);
+        } catch (error) {
+          console.error(error);
+          alert(error.message);
+        }
+      });
+    });
+
+    document.querySelectorAll(".btn-delete-value").forEach(button => {
+      button.addEventListener("click", async () => {
+        if (!confirm("¿Quieres eliminar este valor?")) return;
+
+        const valueId = button.getAttribute("data-value-id");
+
+        try {
+          const response = await fetch(`/background-process-option-values/${valueId}`, { method: "DELETE" });
+          const data = await response.json();
+
+          if (!response.ok || data.error) throw new Error(data.error || "Error al eliminar valor.");
+
+          await cargarHorariosProcess(procesoActualId);
+        } catch (error) {
+          console.error(error);
+          alert(error.message);
+        }
+      });
+    });
+
+    document.querySelectorAll(".btn-delete-option").forEach(button => {
+      button.addEventListener("click", async () => {
+        if (!confirm("¿Quieres eliminar esta opción y todos sus valores?")) return;
+
+        const optionId = button.getAttribute("data-option-id");
+
+        try {
+          const response = await fetch(`/background-process-options/${encodeURIComponent(optionId)}`, { method: "DELETE" });
+          const data = await response.json();
+
+          if (!response.ok || data.error) throw new Error(data.error || "Error al eliminar opción.");
+
+          await cargarHorariosProcess(procesoActualId);
+        } catch (error) {
+          console.error(error);
+          alert(error.message);
+        }
+      });
+    });
+  }
+
+  async function agregarOpcion() {
+    if (!procesoActualId) {
+      alert("Selecciona primero un proceso.");
+      return;
+    }
+
+    const key = prompt("Ingresa la clave de la nueva opción:");
+    if (key === null || !key.trim()) return;
+
+    const name = prompt("Ingresa el nombre de la opción:");
+    if (name === null || !name.trim()) return;
+
+    try {
+      const response = await fetch(`/background-process-options?id=${encodeURIComponent(procesoActualId)}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          key: key.trim(),
+          name: name.trim(),
+          description: null,
+          option_type: "string",
+          multiple: false,
+          values: []
+        })
+      });
+
+      const data = await response.json();
+      if (!response.ok || data.error) throw new Error(data.error || "No se pudo crear la opción.");
+
+      await cargarHorariosProcess(procesoActualId);
+    } catch (error) {
+      console.error(error);
+      alert(error.message);
+    }
+  }
+
+  function escapeHtml(value) {
+    const div = document.createElement("div");
+    div.textContent = value ?? "";
+    return div.innerHTML;
+  }
+});
+</script>
+
+
+
+{% endblock %}
+

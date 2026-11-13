@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block extra_css %}
+  <link rel="stylesheet" href="{{ url_for('static_global', path='style/main_page.css') }}">
+{% endblock %}
+{% block content %}
+  <div class="MainLayout">
+    <div class="welcome">
+      <h1>Panel de automatizaciones</h1>
+      <p>
+        En este panel encontrarás todas las automatizaciones del área
+        de Sostenibilidad, Puedes crear, actualizar y gestionar automatizaciones 
+        y procesos en segundo plano según te parezca conveniente. 
+      </p>
+      <p>
+        A continuación se encuentrán los links importantes del panel.
+      </p>
+    </div>
+    <div class="links">
+      <div class="mainLinks">
+        <h2>Links a Cada Área</h2>
+        <p>
+          Accede a todas las áreas del área de sostenibilidad junto con todas sus automatizaciones.
+        </p>
+        <div class="linkList">
+          <a href="/medioambiente">
+            <span class="material-symbols-outlined mi-icono">nature</span>
+            Área Medioambiente
+          </a>
+          <a href="/automatizaciones">
+            <span class="material-symbols-outlined mi-icono">diversity_4</span>
+            Relaciones Comunitarias
+          </a>
+          <a href="/background-processes">
+            <span class="material-symbols-outlined mi-icono">box</span>
+            100% Nuestro
+          </a>
+          <a href="/sostenibilidad">
+            <span class="material-symbols-outlined mi-icono">temp_preferences_eco</span>
+            Sostenibilidad
+          </a>
+        </div>
+      </div>
+      <div class="imgContainer">
+        <img src="{{ url_for('static_global', path='src/a.png') }}" alt="" srcset="">
+      </div>
+    </div>
+  </div>
+{% endblock %}

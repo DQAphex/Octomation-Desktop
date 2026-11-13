@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "auto_install_unknown": true,
+  "python_executable": "C:\\Users\\diego\\AppData\\Roaming\\octomation-client\\venv\\Scripts\\python.exe",
+  "started_at": "2026-11-13T01:10:46.486400+00:00",
+  "summary": {
+    "installed": 0,
+    "failed": 0,
+    "missing": 0,
+    "skipped": 0
+  },
+  "actions": [],
+  "finished_at": "2026-11-13T01:10:47.936453+00:00"
+}

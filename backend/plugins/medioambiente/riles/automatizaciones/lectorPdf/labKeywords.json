@@ -1,0 +1,30 @@
+{
+  "merieux": {
+    "tabla": "LIM.",
+    "lab": ["Food","MÉRIEUX","NUTRISCIENCES"]
+  },
+  "hidrolab": {
+    "tabla": "",
+    "lab": "www.hidrolab.com"
+  },
+  "anam": {
+    "tabla": "",
+    "lab": "anam"
+  },
+  "sgs": {
+    "tabla": "mg",
+    "lab": "société"
+  },
+  "biodiversa": {
+    "tabla": "sedimentales",
+    "lab": "biodiversa"
+  },
+  "aguas_patagonia": {
+    "tabla": "Parámetro",
+    "lab": "patagonia"
+  },
+  "agq": {
+    "tabla": "",
+    "lab": "agq"
+  }
+}

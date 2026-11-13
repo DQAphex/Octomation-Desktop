@@ -1,0 +1,4 @@
+from pydantic import BaseModel
+
+class {plugin_name_pascal}BaseDTO(BaseModel):
+  nombre: str

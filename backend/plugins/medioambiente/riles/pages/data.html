@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+{% block extra_css %}
+  <link rel="stylesheet" href="{{ url_for('static_medioambiente_riles', path='styles/main.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static_medioambiente_riles', path='styles/data.css') }}">
+{% endblock %}
+{% block content %}
+<div class="riles-container">
+  <div class="title-filter">
+    <div class="title">
+      <h2>Gestión de Riles</h2>
+    </div>
+    <div class="list nav-bar">
+      <a href="/medioambiente/riles/" class="nav">
+        <span class="material-symbols-outlined mi-icono">home</span>
+        Inicio
+      </a>
+      <a href="/medioambiente/riles/inbox" class="nav">
+        <span class="material-symbols-outlined mi-icono">inbox</span>
+        Inbox
+      </a>
+      <a href="/medioambiente/riles/upload" class="nav">
+        <span class="material-symbols-outlined mi-icono">search</span>
+        Subir
+      </a>
+      <a href="/medioambiente/riles/send-mails" class="nav">
+        <span class="material-symbols-outlined mi-icono">send</span>
+        Enviar Correos
+      </a>
+      <a href="/medioambiente/riles/store-list" class="nav">
+        <span class="material-symbols-outlined mi-icono">storefront</span>
+        Lista de locales
+      </a>
+      <a href="/medioambiente/riles/parameter-limits" class="nav">
+        <span class="material-symbols-outlined mi-icono">widget_width</span>
+        Parámetros
+      </a>
+      <a href="/medioambiente/riles/data" class="nav">
+        <span class="material-symbols-outlined mi-icono">database</span>
+        Editar Datos de aplicación
+      </a>
+    </div>
+  </div>
+  <div class="content-display">
+    <div class="content-header">
+      <h2>Gestión de Datos</h2>
+      <p>Desde esta sección puedes gestionar los datos de la aplicación, incluyendo análisis de riles, mails de locales y la cola de mails.</p>
+      <p>Para editar los datos de alguna tabla debes <strong>Descargar</strong> los datos primero.</p>
+      <p>Luego editas los datos en excel y haces click en <strong>Cargar Datos</strong></p>
+      <p>Recuerda <strong>Descargar Datos</strong> antes de <strong>Eliminar Datos</strong> para tener un respaldo de los datos.</p>
+    </div>
+    <div class="table-list">
+      <!-- CARD 1: ANÁLISIS DE RILES -->  
+      <div class="table-card">
+        <span class="material-symbols-outlined mi-icono table-icon">analytics</span>
+        <h2>Análisis de Riles</h2>
+        
+        <div class="table-info">
+          <div class="table-info-total-rows">
+            <p>Total de filas: {{ counts.analisis_agua }}</p>
+          </div>
+          <p class="table-info-description">
+            Tabla con todos los registros de los análisis de riles y sus parámetros medidos
+          </p>
+        </div>
+
+        <!-- 1. DESCARGAR DATOS -->
+        <a href="/medioambiente/riles/api/v1/export-pdf-data" class="nav import-form">
+          <span class="material-symbols-outlined mi-icono">download</span>
+          <span>Descargar Datos</span>
+        </a>
+
+        <!-- 2. CARGAR DATOS (vía fetch) -->
+        <label for="upload-pdf-file-input" class="nav import-form import-label" style="cursor: pointer;">
+          <span class="material-symbols-outlined mi-icono">upload_file</span>
+          <span>Cargar Datos</span>
+          <input 
+            type="file" 
+            id="upload-pdf-file-input" 
+            name="file" 
+            accept=".xlsx, .xls, .csv" 
+            onchange="handleFileUpload(this, '/medioambiente/riles/api/v1/import-pdf-data')" 
+            style="display: none;"
+          >
+        </label>
+
+        <!-- 3. ELIMINAR DATOS -->
+        <button type="button" class="nav btn-delete" onclick="handleDeleteAllData('/medioambiente/riles/api/v1/delete-pdf-data')">
+          <span class="material-symbols-outlined mi-icono">delete</span>
+          <span>Eliminar Datos</span>
+        </button>
+      </div>
+
+      <!-- CARD 2: MAILS DE LOCALES -->
+      <div class="table-card">
+        <span class="material-symbols-outlined mi-icono table-icon">email</span>
+        <h2>Mails de Locales</h2>
+        
+        <div class="table-info">
+          <div class="table-info-total-rows">
+            <p>Total de filas: {{ counts.local_mail }}</p>
+          </div>
+          <p class="table-info-description">
+            Tabla con todos los mails de locales, tanto de sanitaria como del local.
+          </p>
+        </div>
+
+        <!-- 1. DESCARGAR DATOS -->
+        <a href="/medioambiente/riles/mail/export-csv" class="nav import-form">
+          <span class="material-symbols-outlined mi-icono">download</span>
+          <span>Descargar Datos</span>
+        </a>
+
+        <!-- 2. CARGAR DATOS (vía fetch) -->
+        <label for="upload-mail-file-input" class="nav import-form import-label" style="cursor: pointer;">
+          <span class="material-symbols-outlined mi-icono">upload_file</span>
+          <span>Cargar Datos</span>
+          <input 
+            type="file" 
+            id="upload-mail-file-input" 
+            name="file" 
+            accept=".xlsx, .xls, .csv" 
+            onchange="handleFileUpload(this, '/medioambiente/riles/mail/bulk-upload')" 
+            style="display: none;"
+          >
+        </label>
+
+        <!-- 3. ELIMINAR DATOS -->
+        <button type="button" class="nav btn-delete" onclick="handleDeleteAllData('/medioambiente/riles/mail/delete-all')">
+          <span class="material-symbols-outlined mi-icono">delete</span>
+          <span>Eliminar Datos</span>
+        </button>
+      </div>
+
+      <!-- CARD 3: COLA DE MAILS -->
+      <div class="table-card">
+        <span class="material-symbols-outlined mi-icono table-icon">outbox</span>
+        <h2>Cola de Mails</h2>
+        
+        <div class="table-info">
+          <div class="table-info-total-rows">
+            <p>Total de filas: {{ counts.mailing }}</p>
+          </div>
+          <p class="table-info-description">
+            Estado de envío de mails a locales y sanitaria, Enviado y Pendiente.
+          </p>
+        </div>
+
+        <!-- 1. DESCARGAR DATOS -->
+        <a href="/medioambiente/riles/api/v1/export-mailing-queue_csv" class="nav import-form">
+          <span class="material-symbols-outlined mi-icono">download</span>
+          <span>Descargar Datos</span>
+        </a>
+
+        <!-- 2. CARGAR DATOS (vía fetch a la ruta de mailing aislada) -->
+        <label for="upload-mailing-file-input" class="nav import-form import-label" style="cursor: pointer;">
+          <span class="material-symbols-outlined mi-icono">upload_file</span>
+          <span>Cargar Datos</span>
+          <input 
+            type="file" 
+            id="upload-mailing-file-input" 
+            name="file" 
+            accept=".xlsx, .xls, .csv" 
+            onchange="handleFileUpload(this, '/medioambiente/riles/api/v1/insert-mailing-queue')" 
+            style="display: none;"
+          >
+        </label>
+
+        <!-- 3. ELIMINAR DATOS -->
+        <button type="button" class="nav btn-delete" onclick="handleDeleteAllData('/medioambiente/riles/api/v1/delete-mailing-queue')">
+          <span class="material-symbols-outlined mi-icono">delete</span>
+          <span>Eliminar Datos</span>
+        </button>
+      </div>
+      <div class="table-card">
+        <span class="material-symbols-outlined mi-icono table-icon">store</span>
+        <h2>Locales</h2>
+        
+        <div class="table-info">
+          <div class="table-info-total-rows">
+            <p>Total de filas: {{ counts.stores }}</p>
+          </div>
+          <p class="table-info-description">
+            Tabla con todos los registros de los análisis de riles y sus parámetros medidos
+          </p>
+        </div>
+
+        <!-- 1. DESCARGAR DATOS -->
+        <a href="/medioambiente/riles/api/v1/download-locales" class="nav import-form">
+          <span class="material-symbols-outlined mi-icono">download</span>
+          <span>Descargar Datos</span>
+        </a>
+
+        <!-- 2. CARGAR DATOS (vía fetch) -->
+        <label for="upload-store-file-input" class="nav import-form import-label" style="cursor: pointer;">
+          <span class="material-symbols-outlined mi-icono">refresh</span>
+          <span>Eliminar y Cargar Datos</span>
+          <input 
+            type="file" 
+            id="upload-store-file-input" 
+            name="file" 
+            accept=".xlsx, .xls, .csv" 
+            onchange="handleFileUpload(this, '/medioambiente/riles/api/v1/set-locales')" 
+            style="display: none;"
+          >
+        </label>
+      </div>
+    </div>
+  </div>
+  
+  
+  <script>
+    /**
+     * Manejador genérico para la subida de archivos mediante POST usando fetch / FormData
+     * @param {HTMLInputElement} input - Elemento HTML de tipo file que disparó el evento
+     * @param {string} apiEndpoint - URL del endpoint en FastAPI
+     */
+    async function handleFileUpload(input, apiEndpoint) {
+      const file = input.files[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      try {
+        document.body.style.cursor = 'wait';
+
+        const response = await fetch(apiEndpoint, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (response.ok || response.status === 201) {
+          const result = await response.json();
+          alert(`✅ ${result.message || 'Archivo procesado con éxito.'}`);
+          window.location.reload();
+        } else {
+          const errorData = await response.json();
+          alert(`❌ Error al procesar el archivo: ${errorData.detail || 'Error en el servidor'}`);
+        }
+      } catch (error) {
+        console.error("Error en la petición POST de subida:", error);
+        alert("❌ Ocurrió un error de red al intentar subir el archivo.");
+      } finally {
+        document.body.style.cursor = 'default';
+        input.value = '';
+      }
+    }
+
+    /**
+     * Manejador genérico para la eliminación de datos mediante DELETE
+     * @param {string} apiEndpoint - URL del endpoint en FastAPI
+     */
+    async function handleDeleteAllData(apiEndpoint) {
+      const confirmDelete = confirm("⚠️ ¿Estás seguro de que deseas eliminar TODOS los datos de esta tabla? Esta acción no se puede deshacer.");
+      if (!confirmDelete) return;
+
+      try {
+        const response = await fetch(apiEndpoint, {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (response.ok) {
+          alert("✅ Datos eliminados correctamente.");
+          window.location.reload();
+        } else {
+          const errorData = await response.json();
+          alert(`❌ Error al eliminar los datos: ${errorData.detail || 'Error desconocido'}`);
+        }
+      } catch (error) {
+        console.error("Error en la petición DELETE:", error);
+        alert("❌ Ocurrió un error de red al intentar eliminar los datos.");
+      }
+    }
+  </script>
+</div>
+{% endblock %}

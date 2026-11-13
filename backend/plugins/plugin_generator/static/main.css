@@ -1,0 +1,138 @@
+.plugin-generator-container{
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+  gap: 16px;
+  border: 1px solid var(--color-borders);
+  box-sizing: border-box;
+  padding: 16px;
+  width: 800px;
+  border-radius: 16px;
+}
+.plugin-generator-header{
+  width: 100%;
+}
+.form-section{
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.plugin-display{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  width: 100%;
+}
+.form-row{
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.form-group {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.form-group input {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 12px 16px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--color-borders);
+    color: var(--color-text);
+    background-color: var(--color-foreground);
+    transition: .5s cubic-bezier(0.075, 0.82, 0.165, 1);
+}
+
+.form-group label {
+    position: absolute;
+    left: 16px;
+
+    transform: translateY(8px);
+
+    font-size: 0.8rem;
+    color: var(--color-text);
+
+    pointer-events: none;
+
+    background-color: var(--color-foreground);
+    padding: 0 4px;
+
+    transition: 0.3s ease;
+    border-radius: 4px;
+    transition: .5s cubic-bezier(0.075, 0.82, 0.165, 1);
+}
+
+/* Placeholder invisible */
+.form-group input::placeholder {
+    opacity: 0;
+}
+
+/* Label arriba cuando está enfocado */
+.form-group:focus-within label {
+    top: 0;
+    transform: translateY(-50%);
+    border-bottom: 1px solid var(--color-borders);
+}
+
+/* Label arriba cuando ya tiene contenido */
+.form-group:has(input:not(:placeholder-shown)) label {
+    top: 0;
+    transform: translateY(-50%);
+    border-bottom: 1px solid var(--color-borders);
+}
+
+/* Mostrar placeholder al escribir */
+.form-group input:focus::placeholder {
+    opacity: 1;
+}
+
+.form-actions{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap:8px;
+  margin-top: 8px;
+}
+.form-actions button{
+  box-sizing: border-box;
+  padding: 8px 0px 8px 0px;
+}
+h3{
+  margin: 0;
+  transform: translateY(12px);
+}
+.plugin-list{
+  display: flex;
+  align-items: start;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.plugin-list-plugins{
+  box-sizing: border-box;
+  padding: 8px 16px 8px 16px;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
+  width: 100%;
+  background-color: var(--color-background);
+  font-size: 0.8rem;
+  overflow-y: auto;
+  overflow-x: auto;
+}
+button{
+  background-color: var(--smu-highlight-color);
+  border: 1px solid var(--smu-highlight-color-foreground);
+  box-sizing: border-box;
+  padding: 8px;
+  transition: .5s cubic-bezier(0.075, 0.82, 0.165, 1);
+  border-radius: 4px;
+}
+
+button:hover{
+  background-color: var(--color-foreground-sea);
+  color: var(--color-foreground);
+  cursor: pointer;
+}

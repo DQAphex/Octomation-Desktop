@@ -1,0 +1,46 @@
+from pathlib import Path
+from fastapi import APIRouter, Request, HTTPException, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
+from fastapi.templating import Jinja2Templates
+
+from .dto.{plugin_name_lower}_dto import {plugin_name_pascal}BaseDTO
+from .services.{plugin_name_lower}_service import {plugin_name_pascal}Service
+from .{plugin_name_lower}_config import PAGES_DIR, SERVICES_DIR
+from paths import STATIC_DIR, TEMPLATES_DIR
+
+# Definimos el router
+router = APIRouter(
+    prefix="/{plugin_name_lower}",
+    tags=["{plugin_name_title}"]
+)
+
+templates = Jinja2Templates(directory=[PAGES_DIR, TEMPLATES_DIR])
+
+@router.get("/")
+async def {plugin_name_lower}_page(request: Request):
+    """
+    Devuelve la página principal para el plugin {plugin_name_title}.
+    """
+    return templates.TemplateResponse(
+        request=request,
+        name="main.html"
+    )
+
+
+@router.get("/hello-world")
+async def hello_world():
+    result = {plugin_name_pascal}Service.get_hola_mundo()
+
+    return {{
+        "message": result
+    }}
+
+
+@router.post("/hello-name")
+async def hello_name(data: {plugin_name_pascal}BaseDTO):
+    result = {plugin_name_pascal}Service.post_hola_nombre(data)
+
+    return {{
+        "message": result
+    }}

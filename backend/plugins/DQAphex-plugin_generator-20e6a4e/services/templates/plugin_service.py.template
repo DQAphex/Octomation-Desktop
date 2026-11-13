@@ -1,0 +1,17 @@
+from ..dto.{plugin_name_lower}_dto import {plugin_name_pascal}BaseDTO
+
+
+class {plugin_name_pascal}Service:
+
+    def __init__(self, metadata: {plugin_name_pascal}BaseDTO):
+        self.metadata = metadata
+
+    @staticmethod
+    def get_hola_mundo() -> str:
+        return "Hola mundo"
+
+    @staticmethod
+    def post_hola_nombre(
+        data: {plugin_name_pascal}BaseDTO
+    ) -> str:
+        return f"Hola {{data.nombre}}"

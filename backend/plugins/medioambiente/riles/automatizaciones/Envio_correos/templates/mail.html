@@ -1,0 +1,110 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { margin: 0; padding: 0; background-color: #f4f5f7; font-family: system-ui, sans-serif; }
+    .card { background-color: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; width: 512px; }
+    h1 { font-size: 18px; margin: 0 0 12px 0; color: #0f172a; }
+    p { font-size: 13px; margin: 0; color: #475569; }
+    .section-title { font-size: 12px; font-weight: 700; text-transform: uppercase; color: #64748b; padding: 16px 24px 8px 24px; border-bottom: 1px solid #f1f5f9; }
+    .data-td { padding: 8px 24px; font-size: 13px; border: none; }
+    .badge-extreme { color: #dc2626; font-weight: 600; background-color: #fef2f2; padding: 2px 6px; border-radius: 4px; }
+    .badge-tolerable { color: #d97706; font-weight: 600; background-color: #fffbeb; padding: 2px 6px; border-radius: 4px; }
+    .badge-acceptable{color: #3ae080; font-weight: 600; background-color: #ebfde7; padding: 2px 6px; border-radius: 4px; }
+    .empty-msg { font-size: 12px; color: #94a3b8; font-style: italic; padding: 8px 24px 16px 24px; border: none; }
+    ul {
+      list-style-type: none;
+      margin: 0;
+      padding: 0;
+    }
+  </style>
+</head>
+<body>
+  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="padding: 20px 0;">
+    <tr>
+      <td align="center">
+        <table class="card" role="presentation" width="512" border="0" cellspacing="0" cellpadding="0">
+          <tr>
+            <td colspan="2" style="padding: 24px 24px 16px 24px; border: none;">
+              <h1>Análisis de Riles: Local {{ local_nombre }} (CECO: {{ local_id }})</h1>
+              <p>
+                Resumen de parámetros analizados en la muestra sacada del control de riles. A continuación se detallan los resultados obtenidos de los diferentes parámetros medidos.
+                Para mayor facilidad de lectura se indican los parámetros en colores: <br>
+                <ul>
+                  <li><span class="badge-acceptable">CUMPLE</span> </li>
+                  <li><span class="badge-tolerable"> CUMPLE CON TOLERANCIA</span></li>
+                  <li><span class="badge-extreme">NO CUMPLE </span></li>  
+                </ul>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td colspan="2" class="section-title">Fecha de Muestreo</td>
+          </tr>
+            <tr>
+              <td class="data-td" width="380"><strong>{{ fecha_muestreo }}</strong></td>
+            </tr>
+          <tr>
+          <tr>
+            <td colspan="2" class="section-title">Parámetros Fuera de Norma</td>
+          </tr>
+          {% if parametros_extremos %}
+            {% for item in parametros_extremos %}
+              <tr>
+                <td class="data-td" width="380"><strong>{{ item.parametro.upper() }}</strong></td>
+                <td class="data-td" width="84" align="right"><span class="badge-extreme">{{ item.valor }}</span></td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="2" class="empty-msg">No se registraron parámetros extremos.</td>
+            </tr>
+          {% endif %}
+          <tr>
+            <td colspan="2" class="section-title" style="padding-top: 24px;">Parámetros Tolerables</td>
+          </tr>
+          {% if parametros_tolerables %}
+            {% for item in parametros_tolerables %}
+              <tr>
+                <td class="data-td" width="380"><strong>{{ item.parametro.upper() }}</strong></td>
+                <td class="data-td" width="84" align="right"><span class="badge-tolerable">{{ item.valor }}</span></td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="2" class="empty-msg">No se registraron parámetros tolerables.</td>
+            </tr>
+          {% endif %}
+          <tr>
+            <td colspan="2" class="section-title" style="padding-top: 24px;">Parámetros Dentro de Norma</td>
+          </tr>
+          {% if parametros_correctos %}
+            {% for item in parametros_correctos %}
+              <tr>
+                <td class="data-td" width="380"><strong>{{ item.parametro.upper() }}</strong></td>
+                <td class="data-td" width="84" align="right"><span class="badge-acceptable">{{ item.valor }}</span></td>
+              </tr>
+            {% endfor %}
+          {% else %}
+            <tr>
+              <td colspan="2" class="empty-msg">No se registraron parámetros tolerables.</td>
+            </tr>
+          {% endif %}
+          <tr>
+            <td colspan="2" style="padding-bottom: 16px; border: none;"></td>
+          </tr>
+          <tr>
+            <td colspan="2" class="section-title">En Caso de Consultas</td>
+          </tr>
+            <tr>
+              <td class="data-td" width="380">Escribir a 📧<strong><a href="mailto:ambiental@smu.cl">ambiental@smu.cl</a></strong></td>
+            </tr>
+          <tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

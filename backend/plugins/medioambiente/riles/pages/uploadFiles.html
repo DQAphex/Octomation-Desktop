@@ -1,0 +1,605 @@
+{% extends "base.html" %}
+{% block extra_css %}
+  <link rel="stylesheet" href="{{ url_for('static_medioambiente_riles', path='styles/style.css') }}">
+{% endblock %}
+{% block content %}
+<div class="riles-container">
+  <div class="left-bar">
+    <form class="inputs" id="pdf-form">
+      <div class="file-upload-wrapper">
+        <input type="file" id="custom-file-input" name="files" class="hidden-file-input" accept=".pdf" multiple required />
+        <label for="custom-file-input" class="custom-file-label">
+          <span class="material-symbols-outlined mi-icono">file_export</span>
+        </label>
+      </div>
+      <button class="save-data"><span class="material-symbols-outlined mi-icono">check</span></button>
+    </form>
+    <div class="data" id="data-container">
+      <!-- Formulario secundario dedicado a recibir los inputs generados -->
+      <form id="dynamic-data-form" class="dynamic-inputs-form"></form>
+    </div>
+    <div class="navegation" id="navigation-container">
+      <button type="button" id="btn-prev" class="nav-btn-arrow" disabled>
+        <span class="material-symbols-outlined">west</span>
+      </button>
+      <span id="nav-counter" class="nav-counter">0 / 0</span>
+      <button type="button" id="btn-next" class="nav-btn-arrow" disabled>
+        <span class="material-symbols-outlined">east</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="pdf-viewer">
+    <div class="b64" id="b64-container"></div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const fileInput = document.getElementById('custom-file-input');
+    const b64Container = document.getElementById('b64-container');
+    const dynamicDataForm = document.getElementById('dynamic-data-form');
+    const btnPrev = document.getElementById('btn-prev');
+    const btnNext = document.getElementById('btn-next');
+    const navCounter = document.getElementById('nav-counter');
+    const btnSaveData = document.getElementsByClassName('save-data')[0];
+
+    let currentIndex = 0;
+    let totalItems = 0;
+    let processedItems = [];
+    let pdfObjectUrls = [];
+
+    function cleanupPdfUrls() {
+      pdfObjectUrls.forEach(url => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch (error) {
+          console.warn('No se pudo liberar URL del PDF:', error);
+        }
+      });
+
+      pdfObjectUrls = [];
+    }
+
+    function base64ToBlob(base64) {
+      try {
+        let cleanBase64 = base64;
+
+        if (cleanBase64.startsWith('data:')) {
+          cleanBase64 = cleanBase64.split(',')[1];
+        }
+
+        cleanBase64 = cleanBase64.replace(/\s/g, '');
+
+        const byteCharacters = atob(cleanBase64);
+        const byteArrays = [];
+
+        const sliceSize = 1024 * 1024;
+
+        for (let offset = 0; offset < byteCharacters.length; offset += sliceSize) {
+          const slice = byteCharacters.slice(offset, offset + sliceSize);
+          const byteNumbers = new Array(slice.length);
+
+          for (let i = 0; i < slice.length; i++) {
+            byteNumbers[i] = slice.charCodeAt(i);
+          }
+
+          byteArrays.push(new Uint8Array(byteNumbers));
+        }
+
+        return new Blob(byteArrays, {
+          type: 'application/pdf'
+        });
+      } catch (error) {
+        console.error('Error convirtiendo Base64 a Blob:', error);
+        return null;
+      }
+    }
+
+    function updateView(index) {
+      if (totalItems === 0) {
+        navCounter.textContent = '0 / 0';
+        btnPrev.disabled = true;
+        btnNext.disabled = true;
+        return;
+      }
+
+      if (index < 0 || index >= totalItems) {
+        return;
+      }
+
+      currentIndex = index;
+
+      const pdfElements = Array.from(b64Container.children);
+
+      pdfElements.forEach((element, i) => {
+        element.style.display = i === currentIndex ? 'block' : 'none';
+      });
+
+      const fieldsets = dynamicDataForm.querySelectorAll('.dynamic-data-fieldset');
+
+      fieldsets.forEach((fieldset, i) => {
+        fieldset.style.display = i === currentIndex ? 'block' : 'none';
+      });
+
+      navCounter.textContent = `${currentIndex + 1} / ${totalItems}`;
+
+      btnPrev.disabled = currentIndex === 0;
+      btnNext.disabled = currentIndex === totalItems - 1;
+
+      console.log(
+        `Vista actualizada: ${currentIndex + 1} / ${totalItems}`
+      );
+    }
+
+    btnPrev.addEventListener('click', () => {
+      if (currentIndex > 0) {
+        updateView(currentIndex - 1);
+      }
+    });
+
+    btnNext.addEventListener('click', () => {
+      if (currentIndex < totalItems - 1) {
+        updateView(currentIndex + 1);
+      }
+    });
+
+    btnSaveData.addEventListener('click', async (event) => {
+      event.preventDefault();
+
+      const fieldsets = dynamicDataForm.querySelectorAll(
+        '.dynamic-data-fieldset'
+      );
+
+      if (!fieldsets.length) {
+        alert('No hay datos procesados para guardar.');
+        return;
+      }
+
+      const payload = Array.from(fieldsets).map((fieldset, pdfIndex) => {
+        const inputs = fieldset.querySelectorAll('input');
+        const updatedParams = {};
+
+        inputs.forEach(input => {
+          const prefix = `input_${pdfIndex}_`;
+          const key = input.id.startsWith(prefix)
+            ? input.id.replace(prefix, '')
+            : input.id;
+
+          if (key !== 'name_archivo') {
+            updatedParams[key] = input.value;
+          }
+        });
+
+        const originalItem = processedItems[pdfIndex] || {};
+
+        const b64Value =
+          originalItem.base64 ||
+          originalItem.b64 ||
+          null;
+
+        return {
+          ...updatedParams,
+          b64: b64Value
+        };
+      });
+
+      console.log('========== DATOS A GUARDAR ==========');
+      console.log(payload);
+
+      try {
+        btnSaveData.disabled = true;
+
+        const response = await fetch(
+          '/medioambiente/riles/api/v1/save-pdf-data',
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `Error en el servidor: ${response.status}`
+          );
+        }
+
+        const result = await response.json();
+
+        console.log('Respuesta al guardar:', result);
+
+        alert('Datos guardados correctamente.');
+      } catch (error) {
+        console.error(
+          'Error al guardar los datos:',
+          error
+        );
+
+        alert(
+          `Error al guardar: ${error.message}`
+        );
+      } finally {
+        btnSaveData.disabled = false;
+      }
+    });
+
+    fileInput.addEventListener('change', async (event) => {
+      const files = event.target.files;
+
+      if (!files || !files.length) {
+        return;
+      }
+
+      console.log('========================================');
+      console.log('INICIO PROCESAMIENTO DE PDFs');
+      console.log('Cantidad de archivos:', files.length);
+      console.log('========================================');
+
+      cleanupPdfUrls();
+
+      const formData = new FormData();
+
+      Array.from(files).forEach(file => {
+        console.log(
+          'Archivo seleccionado:',
+          file.name,
+          'Tamaño:',
+          file.size,
+          'bytes',
+          'Tipo:',
+          file.type
+        );
+
+        formData.append('files', file);
+      });
+
+      b64Container.innerHTML =
+        '<p>Cargando vista previa...</p>';
+
+      dynamicDataForm.innerHTML =
+        '<p>Procesando datos del PDF...</p>';
+
+      navCounter.textContent = '0 / 0';
+
+      btnPrev.disabled = true;
+      btnNext.disabled = true;
+
+      try {
+        console.log(
+          'Enviando PDFs al backend...'
+        );
+
+        const response = await fetch(
+          '/medioambiente/riles/api/v1/process-multiple-pdfs',
+          {
+            method: 'POST',
+            body: formData
+          }
+        );
+
+        console.log(
+          'HTTP status:',
+          response.status
+        );
+
+        console.log(
+          'Response OK:',
+          response.ok
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            `Error en el servidor: ${response.status}`
+          );
+        }
+
+        const responseJson = await response.json();
+
+        console.log(
+          '========== RESPUESTA COMPLETA BACKEND =========='
+        );
+
+        console.log(responseJson);
+
+        const data = responseJson.data || [];
+
+        console.log(
+          'Cantidad de documentos recibidos:',
+          data.length
+        );
+
+        data.forEach((item, index) => {
+          const b64Val =
+            item.base64 ||
+            item.b64 ||
+            null;
+
+          console.log(
+            `========== PDF ${index + 1} ==========`
+          );
+
+          console.log(
+            'Archivo:',
+            item.name_archivo
+          );
+
+          console.log(
+            'Tiene base64:',
+            !!item.base64
+          );
+
+          console.log(
+            'Tiene b64:',
+            !!item.b64
+          );
+
+          console.log(
+            'Largo base64:',
+            item.base64
+              ? item.base64.length
+              : 0
+          );
+
+          console.log(
+            'Largo b64:',
+            item.b64
+              ? item.b64.length
+              : 0
+          );
+
+          console.log(
+            'Largo utilizado:',
+            b64Val
+              ? b64Val.length
+              : 0
+          );
+
+          if (b64Val) {
+            console.log(
+              'Primeros caracteres:',
+              b64Val.substring(0, 50)
+            );
+          } else {
+            console.error(
+              `PDF ${index + 1} NO contiene Base64`
+            );
+          }
+        });
+
+        b64Container.innerHTML = '';
+        dynamicDataForm.innerHTML = '';
+
+        processedItems = data;
+        totalItems = data.length;
+        currentIndex = 0;
+
+        if (!totalItems) {
+          dynamicDataForm.textContent =
+            'No se encontraron datos.';
+
+          navCounter.textContent = '0 / 0';
+
+          return;
+        }
+
+        data.forEach((item, pdfIndex) => {
+          console.log(
+            `========== RENDERIZANDO PDF ${pdfIndex + 1} ==========`
+          );
+
+          const b64Val =
+            item.base64 ||
+            item.b64 ||
+            null;
+
+          if (b64Val) {
+            console.log(
+              `PDF ${pdfIndex + 1}: Base64 encontrado`
+            );
+
+            console.log(
+              `PDF ${pdfIndex + 1}: tamaño Base64 = ${b64Val.length}`
+            );
+
+            const blob = base64ToBlob(b64Val);
+
+            if (blob) {
+              console.log(
+                `PDF ${pdfIndex + 1}: Blob creado`,
+                blob.size,
+                'bytes'
+              );
+
+              const srcUrl =
+                URL.createObjectURL(blob);
+
+              pdfObjectUrls.push(srcUrl);
+
+              console.log(
+                `PDF ${pdfIndex + 1}: Object URL creada`
+              );
+
+              const iframe =
+                document.createElement('iframe');
+
+              iframe.src = srcUrl;
+
+              iframe.style.display = 'none';
+              iframe.style.width = '100%';
+              iframe.style.height = '100%';
+              iframe.style.border = 'none';
+
+              iframe.onload = () => {
+                console.log(
+                  `✅ PDF ${pdfIndex + 1} cargado correctamente en iframe`
+                );
+              };
+
+              iframe.onerror = error => {
+                console.error(
+                  `❌ Error cargando PDF ${pdfIndex + 1}:`,
+                  error
+                );
+              };
+
+              b64Container.appendChild(iframe);
+            } else {
+              console.error(
+                `❌ No fue posible convertir PDF ${pdfIndex + 1} a Blob`
+              );
+
+              const errorMessage =
+                document.createElement('div');
+
+              errorMessage.className =
+                'no-pdf-message';
+
+              errorMessage.style.display = 'none';
+
+              errorMessage.innerHTML =
+                '<p>Error al cargar la vista previa del PDF</p>';
+
+              b64Container.appendChild(
+                errorMessage
+              );
+            }
+          } else {
+            console.error(
+              `❌ PDF ${pdfIndex + 1} NO tiene Base64`
+            );
+
+            const noPdfMsg =
+              document.createElement('div');
+
+            noPdfMsg.className =
+              'no-pdf-message';
+
+            noPdfMsg.style.display = 'none';
+
+            noPdfMsg.innerHTML =
+              '<p>Sin vista previa de PDF</p>';
+
+            b64Container.appendChild(
+              noPdfMsg
+            );
+          }
+
+          const fieldset =
+            document.createElement('fieldset');
+
+          fieldset.className =
+            'dynamic-data-fieldset';
+
+          fieldset.style.display = 'none';
+
+          const legend =
+            document.createElement('legend');
+
+          legend.textContent =
+            item.name_archivo ||
+            `Documento ${pdfIndex + 1}`;
+
+          fieldset.appendChild(legend);
+
+          const {
+            base64,
+            b64,
+            ...datosLimpios
+          } = item;
+
+          Object.entries(
+            datosLimpios
+          ).forEach(([key, value]) => {
+            const fieldWrapper =
+              document.createElement('div');
+
+            fieldWrapper.className =
+              'field-wrapper';
+
+            const inputId =
+              `input_${pdfIndex}_${key}`;
+
+            const label =
+              document.createElement('label');
+
+            label.htmlFor = inputId;
+
+            label.textContent =
+              key.replace(/_/g, ' ');
+
+            const input =
+              document.createElement('input');
+
+            input.type = 'text';
+
+            input.id = inputId;
+
+            input.name =
+              `${key}_${pdfIndex}`;
+
+            input.value =
+              value ?? '';
+
+            fieldWrapper.append(
+              label,
+              input
+            );
+
+            fieldset.appendChild(
+              fieldWrapper
+            );
+          });
+
+          dynamicDataForm.appendChild(
+            fieldset
+          );
+        });
+
+        console.log(
+          'Todos los PDFs y formularios fueron generados.'
+        );
+
+        updateView(0);
+      } catch (error) {
+        console.error(
+          '========================================'
+        );
+
+        console.error(
+          'ERROR AL PROCESAR LOS PDFs'
+        );
+
+        console.error(
+          error
+        );
+
+        console.error(
+          '========================================'
+        );
+
+        cleanupPdfUrls();
+
+        b64Container.innerHTML = '';
+
+        dynamicDataForm.innerHTML =
+          `<p class="error-message">Error: ${error.message}</p>`;
+
+        navCounter.textContent =
+          '0 / 0';
+
+        btnPrev.disabled = true;
+        btnNext.disabled = true;
+
+        totalItems = 0;
+        currentIndex = 0;
+        processedItems = [];
+      }
+    });
+  });
+</script>
+
+
+{% endblock %}

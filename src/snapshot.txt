@@ -1,0 +1,1408 @@
+# project-snapshot
+# Generated: 2026-10-28T23:52:16.236Z
+# Root: C:\Users\diego\Desktop\capstone\Fase 2\Evidencias Proyecto\repos\Octomation-Engine-Client\electron-fastapi-app\src
+
+=== api\clients.ts ===
+import axios from "axios";
+
+console.log("Variables de entorno:", {
+  tenants: import.meta.env.VITE_TENANTS_URL,
+  plugins: import.meta.env.VITE_PLUGINS_URL
+});
+
+export const billingApi = axios.create({
+  baseURL: import.meta.env.VITE_BILLING_URL,
+  timeout: 15000
+});
+
+export const iamApi = axios.create({
+  baseURL: import.meta.env.VITE_IAM_SERVICE_URL,
+  timeout: 15000
+});
+
+export const transactionsApi = axios.create({
+  baseURL: import.meta.env.VITE_TRANSACTIONS_URL,
+  timeout: 15000
+});
+
+export const tenantsApi = axios.create({
+  baseURL: import.meta.env.VITE_TENANTS_URL,
+  timeout: 15000
+});
+
+export const pluginsApi = axios.create({
+  baseURL: import.meta.env.VITE_PLUGINS_URL,
+  timeout: 15000
+});
+
+console.log("Axios tenants:", tenantsApi.defaults.baseURL);
+
+=== api\members.api.ts ===
+
+
+import { tenantsApi } from "./clients";
+
+export interface Member {
+  memberId: string;
+  iamUserId: string;
+  tenantId: string;
+  name?: string;
+  lastname?: string;
+  profilePicture?: string;
+  status: string;
+}
+
+export async function getMemberByIamUserId(
+  iamUserId: string
+): Promise<Member> {
+  const { data } = await tenantsApi.get<Member>(
+    `/members/data/iam-user/${encodeURIComponent(iamUserId)}`
+  );
+
+  return data;
+}
+
+
+=== api\plugins.api.ts ===
+export interface WorkspacePlugin {
+  workspacePluginId: string;
+  workspaceId: string;
+  pluginId: string;
+  installedAt: string;
+  updatedAt: string;
+}
+
+export interface PluginRelease {
+  id: number;
+  tag: string;
+  version: string;
+  name: string;
+  downloadUrl: string;
+}
+
+const PLUGINS_URL = "http://localhost:4005";
+
+export async function getWorkspacePlugins(
+  workspaceId: string
+): Promise<WorkspacePlugin[]> {
+  const response = await fetch(
+    `${PLUGINS_URL}/workspaces/${encodeURIComponent(workspaceId)}/plugins`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Error al obtener los plugins del workspace: ${response.status} ${response.statusText}`
+    );
+  }
+
+  const data: WorkspacePlugin[] = await response.json();
+
+  return data;
+}
+
+export async function getLatestPluginRelease(
+  pluginId: string
+): Promise<PluginRelease> {
+  const response = await fetch(
+    `${PLUGINS_URL}/plugins/${encodeURIComponent(pluginId)}/releases/latest`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Error al obtener la última release del plugin: ${response.status} ${response.statusText}`
+    );
+  }
+
+  const data: PluginRelease = await response.json();
+
+  return data;
+}
+
+=== api\workspaces.api.ts ===
+export interface Workspace {
+  tenantId: string;
+  workspaceId: string;
+  workspaceNombre: string;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface WorkspacesResponse {
+  data: Workspace[];
+}
+
+const TENANTS_URL = "http://localhost:4004";
+
+export async function getWorkspacesByIamUserId(
+  iamUserId: string
+): Promise<Workspace[]> {
+  const response = await fetch(
+    `${TENANTS_URL}/workspaces/get-all-workspaces-by-iam-id/${encodeURIComponent(iamUserId)}`
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `Error al obtener workspaces: ${response.status} ${response.statusText}`
+    );
+  }
+
+  const result: WorkspacesResponse = await response.json();
+
+  return result.data ?? [];
+}
+
+=== App.tsx ===
+import { Routes, Route, Navigate } from "react-router-dom";
+import Login from "./pages/Login";
+import ProtectedRoute from "./auth/ProtectedRoute";
+import AppLayout from "./components/AppLayout";
+import Dashboard from "./pages/Dashboard";
+import Plugins from "./pages/Plugins";
+import { useAuth } from "./auth/AuthContext";
+
+// Tipos globales definidos en src/types.d.ts
+
+function RootRedirect() {
+  const { user, loading } = useAuth();
+  if (loading) return <div style={{ padding: "2rem", color: "#d4d4d4" }}>Cargando...</div>;
+  return <Navigate to={user ? "/" : "/login"} replace />;
+}
+
+export default function App() {
+  return (
+    <Routes>
+      <Route path="/login" element={<Login />} />
+      <Route element={<ProtectedRoute />}>
+        <Route element={<AppLayout />}>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/plugins" element={<Plugins />} />
+        </Route>
+      </Route>
+      <Route path="*" element={<RootRedirect />} />
+    </Routes>
+  );
+}
+
+
+=== auth\AuthContext.tsx ===
+
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode
+} from "react";
+
+interface User {
+  id: string;
+  email: string;
+  fullName: string;
+  roles: string[];
+  permissions: string[];
+  token: string;
+}
+
+interface AuthContextType {
+  user: User | null;
+  loading: boolean;
+  login: (email: string, password: string) => Promise<void>;
+  logout: () => void;
+}
+
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+const SESSION_KEY = "octomation_session";
+const API_URL = "http://127.0.0.1:4002/iam";
+
+function encryptSession(data: unknown): string {
+  const serialized = JSON.stringify(data);
+
+  if (window.api?.auth?.encrypt) {
+    try {
+      return window.api.auth.encrypt(serialized);
+    } catch {
+      // Usa el fallback de serialización.
+    }
+  }
+
+  return btoa(unescape(encodeURIComponent(serialized)));
+}
+
+function decryptSession(encrypted: string): any {
+  if (window.api?.auth?.decrypt) {
+    try {
+      return JSON.parse(window.api.auth.decrypt(encrypted));
+    } catch {
+      // Intenta recuperar la sesión con el formato de fallback.
+    }
+  }
+
+  try {
+    return JSON.parse(
+      decodeURIComponent(escape(atob(encrypted)))
+    );
+  } catch {
+    return null;
+  }
+}
+
+function decodeJwtPayload(token: string): Record<string, unknown> {
+  const parts = token.split(".");
+
+  if (parts.length !== 3) {
+    throw new Error("El servidor devolvió un JWT inválido");
+  }
+
+  const base64 = parts[1]
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
+
+  const padded = base64.padEnd(
+    base64.length + ((4 - base64.length % 4) % 4),
+    "="
+  );
+
+  const bytes = Uint8Array.from(
+    atob(padded),
+    (char) => char.charCodeAt(0)
+  );
+
+  const payload = new TextDecoder().decode(bytes);
+
+  return JSON.parse(payload);
+}
+
+export function AuthProvider({
+  children
+}: {
+  children: ReactNode;
+}) {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(SESSION_KEY);
+
+      if (stored) {
+        const session = decryptSession(stored);
+        const token = session?.user?.token;
+
+        if (typeof token === "string") {
+          const payload = decodeJwtPayload(token);
+
+          if (
+            typeof payload.exp === "number" &&
+            payload.exp * 1000 <= Date.now()
+          ) {
+            localStorage.removeItem(SESSION_KEY);
+          } else {
+            setUser(session.user);
+          }
+        } else {
+          localStorage.removeItem(SESSION_KEY);
+        }
+      }
+    } catch {
+      localStorage.removeItem(SESSION_KEY);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const login = async (email: string, password: string) => {
+    const response = await fetch(`${API_URL}/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        email,
+        password
+      })
+    });
+
+    const data = await response.json().catch(() => null);
+
+    if (!response.ok) {
+      throw new Error(
+        data?.message || "No se pudo iniciar sesión"
+      );
+    }
+
+    const token = data?.token;
+
+    if (typeof token !== "string") {
+      throw new Error(
+        "La respuesta del servidor no contiene token"
+      );
+    }
+
+    const payload = decodeJwtPayload(token);
+
+    if (
+      typeof payload.sub !== "string" &&
+      typeof payload.sub !== "number"
+    ) {
+      throw new Error("El JWT no contiene un identificador válido");
+    }
+
+    if (
+      typeof payload.email !== "string" ||
+      typeof payload.fullName !== "string" ||
+      !Array.isArray(payload.roles) ||
+      !Array.isArray(payload.permissions)
+    ) {
+      throw new Error("El payload del JWT tiene un formato inválido");
+    }
+
+    const sessionUser: User = {
+      id: String(payload.sub),
+      email: payload.email,
+      fullName: payload.fullName,
+      roles: payload.roles,
+      permissions: payload.permissions,
+      token
+    };
+
+    console.log(sessionUser) 
+
+    localStorage.setItem(
+      SESSION_KEY,
+      encryptSession({ user: sessionUser })
+    );
+
+    setUser(sessionUser);
+  };
+
+  const logout = () => {
+    setUser(null);
+    localStorage.removeItem(SESSION_KEY);
+  };
+
+  return (
+    <AuthContext.Provider
+      value={{ user, loading, login, logout }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const context = useContext(AuthContext);
+
+  if (!context) {
+    throw new Error(
+      "useAuth debe usarse dentro de AuthProvider"
+    );
+  }
+
+  return context;
+}
+
+
+=== auth\ProtectedRoute.tsx ===
+import { Navigate, Outlet } from "react-router-dom";
+import { useAuth } from "./AuthContext";
+
+export default function ProtectedRoute() {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return <div style={{ padding: "2rem", color: "#d4d4d4" }}>Cargando...</div>;
+  }
+
+  if (!user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  return <Outlet />;
+}
+
+
+=== components\AppLayout.tsx ===
+
+import { NavLink, Outlet } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
+import { useEffect, useState } from "react";
+import {
+  getWorkspacesByIamUserId,
+  type Workspace
+} from "../api/workspaces.api";
+
+export default function AppLayout() {
+  const { user, logout } = useAuth();
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setWorkspaces([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadWorkspaces() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const data = await getWorkspacesByIamUserId(user!.id);
+
+        if (!cancelled) {
+          setWorkspaces(data);
+        }
+      } catch {
+        if (!cancelled) {
+          setError("No se pudieron cargar los workspaces.");
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadWorkspaces();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  return (
+    <div className="app-shell">
+      <aside className="sidebar">
+        <div className="sidebar-header">
+          <div className="sidebar-title">Octomation</div>
+
+          <div className="sidebar-user">
+            <div className="sidebar-user-label">Usuario</div>
+            <div className="sidebar-user-name">
+              {user?.fullName || "-"}
+            </div>
+            <div className="sidebar-user-id">
+              {user?.id || "-"}
+            </div>
+          </div>
+        </div>
+
+        <nav className="sidebar-nav">
+          <NavLink
+            to="/"
+            end
+            className={({ isActive }) =>
+              `sidebar-link ${isActive ? "active" : ""}`
+            }
+          >
+            <span className="material-symbols-outlined">
+              home
+            </span>
+            Inicio
+          </NavLink>
+
+          <NavLink
+            to="/plugins"
+            className={({ isActive }) =>
+              `sidebar-link ${isActive ? "active" : ""}`
+            }
+          >
+            <span className="material-symbols-outlined">
+              extension
+            </span>
+            Plugins
+          </NavLink>
+        </nav>
+
+        <div className="sidebar-workspaces">
+          <div className="sidebar-section-title">
+            Mis workspaces
+          </div>
+
+          {loading && <p>Cargando workspaces...</p>}
+
+          {error && <p>{error}</p>}
+
+          {!loading && !error && workspaces.length === 0 && (
+            <p>No tienes workspaces disponibles.</p>
+          )}
+
+          {!error && workspaces.map((workspace) => (
+            <NavLink
+              key={workspace.workspaceId}
+              to={`/workspaces/${workspace.workspaceId}`}
+              className={({ isActive }) =>
+                `sidebar-link ${isActive ? "active" : ""}`
+              }
+            >
+              <span className="material-symbols-outlined">
+                workspaces
+              </span>
+              <span>{workspace.workspaceNombre}</span>
+            </NavLink>
+          ))}
+        </div>
+
+        <div className="sidebar-footer">
+          <button
+            className="sidebar-logout"
+            onClick={logout}
+          >
+            Cerrar sesión
+          </button>
+        </div>
+      </aside>
+
+      <main className="main-content">
+        <Outlet />
+      </main>
+    </div>
+  );
+}
+
+
+=== index.html ===
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0"
+    />
+    <title>Electron + FastAPI (React)</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="./main.tsx"></script>
+  </body>
+</html>
+
+
+=== main.tsx ===
+import React from "react";
+import ReactDOM from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
+import App from "./App";
+import { AuthProvider } from "./auth/AuthContext";
+import "./styles.css";
+
+ReactDOM.createRoot(document.getElementById("root")!).render(
+  <React.StrictMode>
+    <BrowserRouter>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </BrowserRouter>
+  </React.StrictMode>
+);
+
+
+=== pages\Dashboard.tsx ===
+import { useEffect, useRef, useState } from "react";
+
+export default function Dashboard() {
+  const [apiBase, setApiBase] = useState<string | null>(null);
+  const [status, setStatus] = useState<"online" | "offline">("online");
+  const [pid, setPid] = useState<string>("-");
+  const [result, setResult] = useState("Pulsa un botón para probar...");
+  const [plugins, setPlugins] = useState<any[]>([]);
+  const [pluginsResult, setPluginsResult] = useState("Aún no se han cargado plugins...");
+  const [loadingPlugins, setLoadingPlugins] = useState(false);
+
+  const resultRef = useRef<HTMLPreElement>(null);
+
+  useEffect(() => {
+    if (!window.api) return;
+
+    window.api.onPortUpdate((port) => {
+      if (port) {
+        window.API_PORT = port;
+        setApiBase(`http://127.0.0.1:${port}`);
+        setResult(`Servidor FastAPI listo en http://127.0.0.1:${port}`);
+      }
+      setStatus("online");
+    });
+
+    window.api.onStatusUpdate((s) => {
+      setStatus(s.running ? "online" : "offline");
+      if (!s.running) setPid("-");
+    });
+
+    window.api.onPidUpdate((p) => {
+      setPid(p ? String(p) : "-");
+    });
+
+    window.api.getFastApiPort().then((port) => {
+      if (port) {
+        window.API_PORT = port;
+        setApiBase(`http://127.0.0.1:${port}`);
+        setStatus("online");
+      }
+    });
+  }, []);
+
+  const getBase = async () => {
+    if (apiBase) return apiBase;
+    const port = await window.api.getFastApiPort();
+    const base = `http://127.0.0.1:${port || 8000}`;
+    setApiBase(base);
+    return base;
+  };
+
+  const callHealth = async () => {
+    try {
+      const base = await getBase();
+      const res = await fetch(`${base}/health`);
+      if (!res.ok) throw new Error(`Error HTTP: ${res.status}`);
+      const data = await res.json();
+      setResult(JSON.stringify(data, null, 2));
+    } catch (err: any) {
+      setResult(`Error: ${err.message}`);
+    }
+  };
+
+  const callRoot = async () => {
+    try {
+      const base = await getBase();
+      const res = await fetch(`${base}/`);
+      if (!res.ok) throw new Error(`Error HTTP: ${res.status}`);
+      const data = await res.json();
+      setResult(JSON.stringify(data, null, 2));
+    } catch (err: any) {
+      setResult(`Error: ${err.message}`);
+    }
+  };
+
+  const callHola = async () => {
+    try {
+      const base = await getBase();
+      const res = await fetch(`${base}/hola`);
+      if (!res.ok) throw new Error(`Error HTTP: ${res.status}`);
+      const data = await res.json();
+      setResult(JSON.stringify(data, null, 2));
+    } catch (err: any) {
+      setResult(`Error: ${err.message}`);
+    }
+  };
+
+  const stop = async () => {
+    setResult("Apagando servidor FastAPI...");
+    const res = await window.api.stopFastAPI();
+    setResult(res.message);
+    setStatus("offline");
+    setPid("-");
+  };
+
+  const restart = async () => {
+    setResult("Reiniciando servidor FastAPI...\nEspera un momento...");
+    const res = await window.api.restartFastAPI();
+    setResult(res.message + "\n\nEl servidor se está levantando de nuevo...");
+  };
+
+  const loadPlugins = async () => {
+    setLoadingPlugins(true);
+    setPlugins([]);
+    setPluginsResult("Cargando plugins desde http://localhost:4005/plugins...");
+    try {
+      const res = await window.api.getAvailablePlugins();
+      if (!res.success) {
+        setPluginsResult("Error: " + res.error);
+        return;
+      }
+      const list = res.data || [];
+      if (list.length === 0) {
+        setPluginsResult("No hay plugins disponibles en el catálogo.");
+        return;
+      }
+      setPlugins(list);
+      setPluginsResult(`Se encontraron ${list.length} plugin(s). Pulsa "Descargar y extraer" para guardarlos en ./plugins/`);
+    } catch (err: any) {
+      setPluginsResult("Error inesperado: " + err.message);
+    } finally {
+      setLoadingPlugins(false);
+    }
+  };
+
+  const downloadPlugin = async (pluginId: string, btn: HTMLButtonElement) => {
+    btn.disabled = true;
+    btn.classList.add("downloading");
+    btn.textContent = "⏳ Descargando...";
+    setPluginsResult(`Obteniendo información de descarga para ${pluginId}...`);
+    try {
+      const dl = await window.api.downloadPlugin(pluginId);
+      if (dl.success) {
+        setPluginsResult(dl.message + "\n\nRevisa la carpeta: electron-fastapi-app/plugins/");
+        btn.textContent = "✅ Extraído";
+      } else {
+        setPluginsResult("Error: " + dl.error);
+        btn.disabled = false;
+        btn.classList.remove("downloading");
+        btn.textContent = "⬇️ Descargar y extraer";
+      }
+    } catch (err: any) {
+      setPluginsResult("Error: " + err.message);
+      btn.disabled = false;
+      btn.classList.remove("downloading");
+      btn.textContent = "⬇️ Descargar y extraer";
+    }
+  };
+
+  return (
+    <div className="page-container">
+      <div className="page-header">
+        <div>
+          <h1>Inicio</h1>
+          <p>App conectada a servidor FastAPI local</p>
+        </div>
+      </div>
+
+      <div className="server-controls">
+        <span className={`status ${status}`}>● Servidor {status === "online" ? "en línea" : "apagado"}</span>
+        <span className="pid">PID: {pid}</span>
+        <div className="buttons">
+          <button id="btnStop" className="btn-danger" onClick={stop} disabled={status === "offline"}>
+            ⛔ Apagar servidor
+          </button>
+          <button id="btnRestart" className="btn-warning" onClick={restart}>
+            🔄 Reiniciar servidor
+          </button>
+        </div>
+      </div>
+
+      <div className="buttons">
+        <button onClick={callHealth}>Comprobar /health</button>
+        <button onClick={callRoot}>Llamar /</button>
+        <button onClick={callHola}>Llamar /hola</button>
+      </div>
+
+      <pre ref={resultRef}>{result}</pre>
+
+      <section className="plugins-section">
+        <div className="plugins-header">
+          <h2>🧩 Tienda de Plugins</h2>
+          <button className="btn-primary" onClick={loadPlugins} disabled={loadingPlugins}>
+            {loadingPlugins ? "⏳ Cargando..." : "🔍 Cargar plugins desde localhost:4005"}
+          </button>
+        </div>
+        <p className="plugins-subtitle">Se descargarán desde http://localhost:4005/plugins y se extraerán en ./plugins/</p>
+        <div className="plugins-list">
+          {plugins.map((plugin) => (
+            <div className="plugin-card" key={plugin.pluginId}>
+              <h3>{plugin.name}</h3>
+              <div className="plugin-meta">
+                <span><strong>Categoría:</strong> {plugin.pluginCategory}</span>
+                <span><strong>Autor:</strong> {plugin.author} ({plugin.email})</span>
+                <span><strong>Versión:</strong> {plugin.latestVersion} ({plugin.releaseTag})</span>
+                <span><strong>Repositorio:</strong> {plugin.repositoryUrl}</span>
+              </div>
+              <div className="plugin-actions">
+                <button className="btn-download" onClick={(e) => downloadPlugin(plugin.pluginId, e.currentTarget)}>
+                  ⬇️ Descargar y extraer
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <pre>{pluginsResult}</pre>
+      </section>
+    </div>
+  );
+}
+
+
+=== pages\Login.tsx ===
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
+
+export default function Login() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const navigate = useNavigate();
+  const { login } = useAuth();
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+
+    try {
+      await login(email, password);
+      navigate("/", { replace: true });
+    } catch (err: unknown) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "No se pudo iniciar sesión"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="login-container">
+      <form className="login-card" onSubmit={handleSubmit}>
+        <h1>Iniciar sesión</h1>
+        <p>Acceso solo para usuarios existentes</p>
+
+        <label>
+          Correo electrónico
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoFocus
+          />
+        </label>
+
+        <label>
+          Contraseña
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+        </label>
+
+        {error && <div className="login-error">{error}</div>}
+
+        <button type="submit" disabled={loading}>
+          {loading ? "Ingresando..." : "Ingresar"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+=== pages\Plugins.tsx ===
+import { useState } from "react";
+
+export default function Plugins() {
+  const [plugins, setPlugins] = useState<any[]>([]);
+  const [loadingList, setLoadingList] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [message, setMessage] = useState("Sin acciones aún.");
+
+  const loadInstalledPlugins = async () => {
+    setLoadingList(true);
+    setMessage("Cargando lista de plugins instalados...");
+    try {
+      // TODO: Implementar carga de plugins instalados
+      setPlugins([]);
+      setMessage("Lista de plugins cargada (sin implementación aún).");
+    } catch (err: any) {
+      setMessage("Error: " + err.message);
+    } finally {
+      setLoadingList(false);
+    }
+  };
+
+  const searchUpdates = async () => {
+    setSearching(true);
+    setMessage("Buscando actualizaciones...");
+    try {
+      // TODO: Implementar búsqueda de actualizaciones
+      setMessage("Búsqueda de actualizaciones completada (función vacía por ahora).");
+    } catch (err: any) {
+      setMessage("Error: " + err.message);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const updatePlugins = async () => {
+    setUpdating(true);
+    setMessage("Actualizando plugins...");
+    try {
+      // TODO: Implementar actualización de plugins
+      setMessage("Actualización de plugins completada (función vacía por ahora).");
+    } catch (err: any) {
+      setMessage("Error: " + err.message);
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  return (
+    <div className="page-container">
+      <div className="page-header">
+        <div>
+          <h1>Plugins</h1>
+          <p>Gestión de plugins instalados</p>
+        </div>
+        <div className="plugins-actions">
+          <button className="btn-primary" onClick={searchUpdates} disabled={searching || updating}>
+            {searching ? "Buscando..." : "Buscar actualizaciones"}
+          </button>
+          <button className="btn-warning" onClick={updatePlugins} disabled={updating || searching}>
+            {updating ? "Actualizando..." : "Actualizar plugins"}
+          </button>
+        </div>
+      </div>
+
+      <div className="plugins-toolbar">
+        <button onClick={loadInstalledPlugins} disabled={loadingList}>
+          {loadingList ? "Cargando..." : "Recargar lista"}
+        </button>
+      </div>
+
+      <div className="plugins-table-wrapper">
+        <table className="plugins-table">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Versión</th>
+              <th>Estado</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {plugins.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="empty-row">
+                  No hay plugins para mostrar
+                </td>
+              </tr>
+            ) : (
+              plugins.map((plugin, idx) => (
+                <tr key={idx}>
+                  <td>{plugin.name}</td>
+                  <td>{plugin.version}</td>
+                  <td>{plugin.status}</td>
+                  <td>
+                    <button>Ver detalles</button>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <pre className="plugins-log">{message}</pre>
+    </div>
+  );
+}
+
+
+=== styles.css ===
+:root {
+  --bg: #1D1425;
+  --card: #2B193B;
+  --text: #D9D9DC;
+  --border: #4B3B51;
+  --primary: #1cb2d8;
+  --success: #4ceb81;
+  --warning: #ff657f;
+  --danger: #B30089;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+}
+
+.btn-logout {
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 360px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.login-card h1 {
+  margin: 0;
+}
+
+.login-card p {
+  margin: -0.5rem 0 0.5rem 0;
+  color: #ce9178;
+}
+
+.login-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.login-card input {
+  background: #1e1e1e;
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 0.5rem;
+  border-radius: 4px;
+}
+
+.login-error {
+  color: var(--danger);
+}
+
+.login-card button {
+  margin-top: 0.5rem;
+}
+
+h1 {
+  margin: 0 0 0.5rem 0;
+}
+
+.server-controls {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1.5rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.status {
+  font-weight: 600;
+}
+
+.status.online {
+  color: var(--success);
+}
+
+.status.offline {
+  color: var(--danger);
+}
+
+.pid {
+  color: #9cdcfe;
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+button {
+  background: var(--primary);
+  color: white;
+  border: none;
+  padding: 0.5rem 0.9rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-danger {
+  background: #d16969;
+}
+
+.btn-warning {
+  background: #d7ba7d;
+  color: #1e1e1e;
+}
+
+.btn-primary {
+  background: #4ec9b0;
+  color: #1e1e1e;
+}
+
+pre {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.plugins-section {
+  margin-top: 2rem;
+}
+
+.plugins-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.plugins-subtitle {
+  color: #ce9178;
+}
+
+.plugins-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin: 1rem 0;
+}
+
+.plugin-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.plugin-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.9rem;
+}
+
+.plugin-actions {
+  margin-top: 1rem;
+}
+
+.btn-download.downloading {
+  opacity: 0.7;
+}
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 260px;
+  background: var(--card);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-header {
+  padding: 1.5rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.sidebar-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.sidebar-user {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.sidebar-user-label {
+  font-size: 0.8rem;
+  color: #9cdcfe;
+}
+
+.sidebar-user-name {
+  font-weight: 600;
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  padding: 0 0.75rem;
+  gap: 0.25rem;
+}
+
+.sidebar-link {
+  color: var(--text);
+  text-decoration: none;
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+}
+
+.sidebar-link:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.sidebar-link.active {
+  background: var(--primary);
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 1rem 0.75rem;
+}
+
+.sidebar-logout {
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+.main-content {
+  flex: 1;
+  overflow: auto;
+}
+
+.page-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.page-header h1 {
+  margin: 0 0 0.25rem 0;
+}
+
+.page-header p {
+  margin: 0;
+  color: #ce9178;
+}
+
+.plugins-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.plugins-toolbar {
+  margin-bottom: 1rem;
+}
+
+.plugins-table-wrapper {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.plugins-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.plugins-table th,
+.plugins-table td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+
+.plugins-table thead {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.plugins-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.empty-row {
+  text-align: center;
+  color: #6a9955;
+}
+
+.plugins-log {
+  margin-top: 1rem;
+}
+
+
+=== types.d.ts ===
+import "@types/react";
+import "@types/react-dom";
+
+declare global {
+  interface Window {
+    api: any;
+    API_PORT?: number;
+  }
+}
+
+export {};
+
+
+=== vite-env.d.ts ===
+/// <reference types="vite/client" />
+
+declare module "*.css" {
+  const content: string;
+  export default content;
+}
+
+interface ImportMetaEnv {
+  readonly VITE_BILLING_URL: string;
+  readonly VITE_IAM_SERVICE_URL: string;
+  readonly VITE_TRANSACTIONS_URL: string;
+  readonly VITE_TENANTS_URL: string;
+  readonly VITE_PLUGINS_URL: string;
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
+}

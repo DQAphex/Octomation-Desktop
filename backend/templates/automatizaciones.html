@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="automatizaciones-container">
+    <h1>Panel de Automatizaciones</h1>
+    <!-- Iterar sobre cada categoría (tag) del árbol -->
+    {% for categoria, endpoints in arbol.items() %}
+        <div class="categoria-box">
+            <h2>{{ categoria }}</h2>
+            <ul>
+                <!-- Iterar sobre cada endpoint dentro de la categoría -->
+                {% for endpoint in endpoints %}
+                    <li>
+                        <!-- El enlace href apunta directamente a la ruta de la API -->
+                        <span class="metodo-badge {{ endpoint.metodo | lower }}">{{ endpoint.metodo }}</span>
+                        <a href="{{ endpoint.ruta }}">
+                            <strong>{{ endpoint.titulo }}</strong>
+                        </a>
+                        {% if endpoint.descripcion %}
+                            <p class="desc">{{ endpoint.descripcion }}</p>
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ul>
+        </div>
+    {% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block extra_css %}
+  <link rel="stylesheet" href="{{ url_for('static', path='style/riles/style.css') }}">
+{% endblock %}
+{% block content %}
+<div class="riles-container">
+  <div class="left-bar">
+    <div class="actions-bar">
+      <button class="save-data" id="btn-save"><span class="material-symbols-outlined mi-icono">check</span></button>
+    </div>
+    <div class="data" id="data-container">
+      <form id="dynamic-data-form" class="dynamic-inputs-form"></form>
+    </div>
+    <div class="navegation" id="navigation-container">
+      <button type="button" id="btn-prev" class="nav-btn-arrow" disabled>
+        <span class="material-symbols-outlined">west</span>
+      </button>
+      <span id="nav-counter" class="nav-counter">0 / 0</span>
+      <button type="button" id="btn-next" class="nav-btn-arrow" disabled>
+        <span class="material-symbols-outlined">east</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="pdf-viewer">
+    <div class="b64" id="b64-container"></div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const b64Container = document.getElementById('b64-container');
+    const dynamicDataForm = document.getElementById('dynamic-data-form');
+    const btnPrev = document.getElementById('btn-prev');
+    const btnNext = document.getElementById('btn-next');
+    const navCounter = document.getElementById('nav-counter');
+    const btnSaveData = document.getElementById('btn-save');
+
+    let currentIndex = 0;
+    let totalItems = 0;
+    let processedItems = [];
+
+    function updateView(index) {
+      if (totalItems === 0) return;
+
+      currentIndex = index;
+
+      const elements = b64Container.children;
+      Array.from(elements).forEach((el, i) => {
+        el.style.display = (i === currentIndex) ? 'block' : 'none';
+      });
+
+      const fieldsets = dynamicDataForm.querySelectorAll('.dynamic-data-fieldset');
+      fieldsets.forEach((fieldset, i) => {
+        fieldset.style.display = (i === currentIndex) ? 'block' : 'none';
+      });
+
+      navCounter.textContent = `${currentIndex + 1} / ${totalItems}`;
+
+      btnPrev.disabled = (currentIndex === 0);
+      btnNext.disabled = (currentIndex === totalItems - 1);
+    }
+
+    btnPrev.addEventListener('click', () => {
+      if (currentIndex > 0) updateView(currentIndex - 1);
+    });
+
+    btnNext.addEventListener('click', () => {
+      if (currentIndex < totalItems - 1) updateView(currentIndex + 1);
+    });
+
+    btnSaveData.addEventListener('click', async (event) => {
+      event.preventDefault();
+
+      const fieldsets = dynamicDataForm.querySelectorAll('.dynamic-data-fieldset');
+      if (!fieldsets.length) {
+        alert('No hay datos procesados para guardar.');
+        return;
+      }
+
+      // 1. Armar la lista combinando los inputs editados + la clave b64 original
+      const payloadData = Array.from(fieldsets).map((fieldset, pdfIndex) => {
+        const inputs = fieldset.querySelectorAll('input');
+        const updatedParams = {};
+
+        inputs.forEach(input => {
+          const key = input.id.replace(`input_${pdfIndex}_`, '');
+          if (key !== "name_archivo") {
+            updatedParams[key] = input.value;
+          }
+        });
+
+        // Recuperar el base64 original del item procesado
+        const originalParams = processedItems[pdfIndex]?.parameters || {};
+        const b64Value = originalParams.base64 || originalParams.b64 || null;
+
+        return {
+          ...updatedParams,
+          b64: b64Value
+        };
+      });
+
+      // 2. Extraer la lista de IDs a inactivar
+      const idsToDeactivate = processedItems.map(item => item.id_correo);
+
+      try {
+        btnSaveData.disabled = true;
+
+        // Guardar la data
+        const saveResponse = await fetch('/medioambiente/riles/api/v1/save-pdf-data', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payloadData)
+        });
+
+        if (!saveResponse.ok) {
+          throw new Error(`Error al guardar datos: ${saveResponse.status}`);
+        }
+
+        // Marcar inactivos en el inbox
+        const deactivateResponse = await fetch('/medioambiente/riles/api/v1/deactivate-inbox', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(idsToDeactivate)
+        });
+
+        if (!deactivateResponse.ok) {
+          throw new Error(`Error al inactivar registros: ${deactivateResponse.status}`);
+        }
+
+        alert('Datos guardados e inactivos procesados correctamente.');
+        loadInboxData();
+
+      } catch (error) {
+        console.error('Error en el proceso:', error);
+        alert(`Error: ${error.message}`);
+      } finally {
+        btnSaveData.disabled = false;
+      }
+    });
+
+    async function loadInboxData() {
+      b64Container.innerHTML = '<p>Cargando vista previa...</p>';
+      dynamicDataForm.innerHTML = '<p>Cargando datos del servidor...</p>';
+      navCounter.textContent = '0 / 0';
+      btnPrev.disabled = true;
+      btnNext.disabled = true;
+
+      try {
+        const response = await fetch('/medioambiente/riles/api/v1/get-inbox');
+        if (!response.ok) throw new Error(`Error al obtener datos: ${response.status}`);
+
+        const data = await response.json();
+        b64Container.innerHTML = '';
+        dynamicDataForm.innerHTML = '';
+        processedItems = data;
+        totalItems = data.length;
+
+        if (!totalItems) {
+          dynamicDataForm.innerHTML = '<p>No se encontraron registros en el inbox.</p>';
+          return;
+        }
+
+        data.forEach((item, pdfIndex) => {
+          const params = item.parameters || {};
+          const b64Val = params.base64 || params.b64;
+
+          // Contenedor del PDF (iframe o aviso de error)
+          if (b64Val) {
+            const srcUrl = b64Val.startsWith('data:') 
+              ? b64Val 
+              : `data:application/pdf;base64,${b64Val}`;
+
+            const iframe = document.createElement('iframe');
+            iframe.src = srcUrl;
+            iframe.style.display = 'none';
+            b64Container.appendChild(iframe);
+          } else {
+            const noPdfMsg = document.createElement('div');
+            noPdfMsg.className = 'no-pdf-message';
+            noPdfMsg.style.display = 'none';
+            noPdfMsg.innerHTML = '<p>Sin vista previa de PDF</p>';
+            b64Container.appendChild(noPdfMsg);
+          }
+
+          // Generación de inputs dinámicos
+          const fieldset = document.createElement('fieldset');
+          fieldset.className = 'dynamic-data-fieldset';
+          fieldset.style.display = 'none';
+
+          const legend = document.createElement('legend');
+          legend.textContent = params.name_archivo || `Registro #${item.id_inbox || pdfIndex + 1}`;
+          fieldset.appendChild(legend);
+
+          const { base64, b64, ...datosLimpios } = params;
+
+          Object.entries(datosLimpios).forEach(([key, value]) => {
+            const fieldWrapper = document.createElement('div');
+            fieldWrapper.className = 'field-wrapper';
+
+            const inputId = `input_${pdfIndex}_${key}`;
+
+            const label = document.createElement('label');
+            label.htmlFor = inputId;
+            label.textContent = key.replace(/_/g, ' ');
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.id = inputId;
+            input.name = `${key}_${pdfIndex}`;
+            input.value = value ?? '';
+
+            fieldWrapper.append(label, input);
+            fieldset.appendChild(fieldWrapper);
+          });
+
+          dynamicDataForm.appendChild(fieldset);
+        });
+
+        updateView(0);
+
+      } catch (error) {
+        console.error('Error al cargar datos:', error);
+        b64Container.innerHTML = '';
+        dynamicDataForm.innerHTML = `<p class="error-message">Error: ${error.message}</p>`;
+        navCounter.textContent = '0 / 0';
+        btnPrev.disabled = true;
+        btnNext.disabled = true;
+      }
+    }
+
+    loadInboxData();
+  });
+</script>
+{% endblock %}

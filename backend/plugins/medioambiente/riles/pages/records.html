@@ -1,0 +1,933 @@
+{% extends "base.html" %}
+{% block extra_css %}
+  <link rel="stylesheet" href="{{ url_for('static_medioambiente_riles', path='styles/records.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static_medioambiente_riles', path='styles/sendmail.css') }}">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.2.1/dist/chartjs-plugin-annotation.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
+  <style>
+    /* Estilos para la tabla vertical */
+    .riles-table-wrapper {
+      width: 100%;
+      overflow-x: auto;
+      overflow-y: auto;
+      margin-bottom: 20px;
+      background: #ffffff;
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .riles-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.72rem;
+      font-family: sans-serif;
+      text-align: center;
+    }
+
+    .riles-table th,
+    .riles-table td {
+      padding: 6px 8px;
+      border: 1px solid #e5e7eb;
+      white-space: nowrap;
+    }
+
+    .riles-table th {
+      background-color: #f8fafc;
+      color: #1e293b;
+      font-weight: 700;
+    }
+
+    .riles-table th small {
+      display: block;
+      font-size: 0.65rem;
+      color: #64748b;
+      font-weight: normal;
+    }
+
+    /* Estados de semáforo por celda */
+    .cell-normal {
+      background-color: #f0fdf4 !important; /* Verde claro */
+      color: #166534 !important;
+    }
+
+    .cell-warning {
+      background-color: #fef3c7 !important; /* Amarillo/Naranja claro (> 100% Límite) */
+      color: #92400e !important;
+      font-weight: 700;
+    }
+
+    .cell-danger {
+      background-color: #fee2e2 !important; /* Rojo claro (> 200% Límite o fuera de rango pH) */
+      color: #991b1b !important;
+      font-weight: 700;
+    }
+
+    .cell-empty {
+      background-color: #ffffff;
+      color: #9ca3af;
+    }
+  </style>
+  <style>
+
+    .riles-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.75rem;
+      font-family: sans-serif;
+      text-align: center;
+    }
+
+    .riles-table th, .riles-table td {
+      padding: 6px 10px;
+      border: 1px solid #e5e7eb;
+      white-space: nowrap;
+    }
+
+    .riles-table th {
+      background-color: #f8fafc;
+      color: #1e293b;
+      font-weight: 700;
+    }
+
+    /* Estados de celda según norma RILES */
+    .cell-normal {
+      background-color: #f0fdf4 !important; /* Verde claro */
+      color: #166534 !important;
+    }
+
+    .cell-warning {
+      background-color: #fef3c7 !important; /* Amarillo/Naranja claro (> 100% Límite) */
+      color: #92400e !important;
+      font-weight: 700;
+    }
+
+    .cell-danger {
+      background-color: #fee2e2 !important; /* Rojo claro (> 200% Límite o fuera de rango pH) */
+      color: #991b1b !important;
+      font-weight: 700;
+    }
+
+    .cell-empty {
+      background-color: #ffffff;
+      color: #9ca3af;
+    }
+  </style>
+  <style>
+    /* ==========================================================================
+       1. AJUSTES DEL CONTENEDOR PADRE Y ESTRUCTURA PRINCIPAL
+       ========================================================================== */
+
+    /* Sobrescribimos el centrado estricto de .container para permitir scroll vertical completo */
+    .container {
+      display: block !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      align-items: unset !important;
+      justify-content: unset !important;
+    }
+
+    .riles-container {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      width: 100%;
+      min-width: 0; /* Evita que las tablas anchas rompan el ancho de Flex */
+      height: auto;
+      box-sizing: border-box;
+      padding: 0.5rem;
+      background-color: var(--color-foreground, #ffffff);
+    }
+
+    /* Tarjeta genérica */
+    .riles-card {
+      background-color: #ffffff;
+      border: 1px solid #e5e7eb;
+      border-radius: 0.5rem;
+      box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+      padding: 1.25rem;
+      width: 100%;
+      box-sizing: border-box;
+      flex-shrink: 0; /* Impide que la tarjeta se aplaste si falta espacio */
+    }
+
+    /* ==========================================================================
+       2. ENCABEZADO Y CONTROLES SUPERIORES
+       ========================================================================== */
+    .riles-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .riles-header-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+
+    .riles-title {
+      margin: 0;
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: #111827;
+    }
+
+    .riles-subtitle {
+      margin: 0;
+      font-size: 0.875rem;
+      color: #6b7280;
+    }
+
+    .riles-action-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .btn-screenshot {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.55rem 1rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: #374151;
+      background-color: #ffffff;
+      border: 1px solid #d1d5db;
+      border-radius: 0.375rem;
+      cursor: pointer;
+      transition: background-color 0.2s ease, border-color 0.2s ease;
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    }
+
+    .btn-screenshot:hover {
+      background-color: #f3f4f6;
+      border-color: #9ca3af;
+      color: #111827;
+    }
+
+    /* ==========================================================================
+       3. TABLA DE RESUMEN HISTÓRICO (SECCIÓN MEDIA)
+       ========================================================================== */
+    .riles-table-section {
+      width: 100%;
+      flex-shrink: 0;
+    }
+
+    .riles-table-card {
+      padding: 0;
+      overflow: hidden;
+    }
+
+    .riles-table-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 1rem;
+      background-color: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+    }
+
+    .riles-table-title {
+      margin: 0;
+      font-size: 0.875rem;
+      font-weight: 700;
+      color: #4b5563;
+    }
+
+    .riles-badge {
+      display: inline-block;
+      padding: 0.25em 0.6em;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #ffffff;
+      background-color: #6b7280;
+      border-radius: 0.25rem;
+    }
+
+    .riles-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8rem;
+      white-space: nowrap;
+    }
+
+    .riles-table thead th {
+      position: sticky;
+      top: 0;
+      background-color: #1f2937;
+      color: #ffffff;
+      font-size: 0.75rem;
+      padding: 0.5rem 0.6rem;
+      text-align: left;
+      z-index: 10;
+    }
+
+    .riles-table tbody tr {
+      border-bottom: 1px solid #f3f4f6;
+    }
+
+    .riles-table tbody tr:nth-child(even) {
+      background-color: #f9fafb;
+    }
+
+    .riles-table tbody tr:hover {
+      background-color: #f3f4f6;
+    }
+
+    .riles-table td {
+      padding: 0.4rem 0.6rem;
+      vertical-align: middle;
+    }
+
+    .riles-table .col-id {
+      font-weight: 700;
+    }
+
+    .riles-table .col-number {
+      text-align: right;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    .riles-table .col-subtext {
+      font-size: 0.75rem;
+      color: #6b7280;
+    }
+
+    .riles-table .text-empty {
+      color: #9ca3af;
+    }
+
+    .riles-table .table-empty-row {
+      text-align: center;
+      padding: 1rem;
+      color: #6b7280;
+    }
+
+    /* ==========================================================================
+      4. GRILLA DE GRÁFICOS (SECCIÓN INFERIOR)
+       ========================================================================== */
+    .riles-charts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(450px, 1fr));
+      gap: 1.25rem;
+      width: 100%;
+      box-sizing: border-box;
+      flex-shrink: 0;
+    }
+
+    .riles-chart-card {
+      background: #ffffff;
+      border-radius: 8px;
+      padding: 1rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      border: 1px solid #e5e7eb;
+      display: flex;
+      flex-direction: column;
+      height: 340px; /* Altura fija para que los gráficos mantengan su proporción */
+      box-sizing: border-box;
+    }
+
+    .riles-chart-card-header {
+      margin-bottom: 0.75rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-shrink: 0;
+    }
+
+    .riles-chart-card-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #1f2937;
+      margin: 0;
+    }
+
+    .riles-chart-card-subtitle {
+      font-size: 0.8rem;
+      color: #6b7280;
+      margin: 0.2rem 0 0 0;
+    }
+
+    .chart-container-card {
+      position: relative;
+      flex: 1 1 auto;
+      width: 100%;
+      min-height: 0; /* Permite a Canvas escalar correctamente sin desbordar */
+    }
+
+    /* Media Queries para pantallas pequeñas */
+    @media (max-width: 640px) {
+      .riles-charts-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+{% endblock %}
+
+{% block content %}
+<div class="riles-container" id="rilesContainer">
+
+  <!-- 1. ENCABEZADO DEL REPORTE -->
+  <header class="riles-card">
+    <div class="riles-card-header">
+      <div class="riles-header-info">
+        <h4 class="riles-title">Evolución Histórica | Local {{analisis_list[0].local_id}} - {{analisis_list[0].local_nombre}}</h4>
+        <p class="riles-subtitle">Análisis gráfico e individualizado según límites normativos de descarga.</p>
+      </div>
+      <div class="riles-action-controls">
+        <button type="button" id="btnScreenshot" class="btn-screenshot" title="Exportar informe a PDF">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+            <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+          </svg>
+          <span>Exportar PDF</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 2. TABLA COMPACTA CON SCROLL INDEPENDIENTE -->
+  <section class="riles-table-section">
+    <div class="riles-card riles-table-card">
+      <div class="riles-table-header">
+        <h6 class="riles-table-title">Resumen Histórico de Mediciones</h6>
+        <span class="riles-badge">{{ analisis_list|length }} Registros</span>
+      </div>
+      
+      <div class="riles-table-wrapper" id="rilesTableWrapper">
+        <table class="riles-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Fecha Muestreo</th>
+              <th>Fecha Emisión</th>
+              <th>Lab</th>
+              <th>Empresa</th>
+              <th>Local</th>
+              <th>Región / Comuna</th>
+              <th>Dirección</th>
+              <th>Monitoreo</th>
+              <th>Tipo Muestreo</th>
+              <th>Convenio</th>
+              <th>RPM</th>
+              <th class="col-number">pH</th>
+              <th class="col-number">Temp (°C)</th>
+              <th class="col-number">DBO₅</th>
+              <th class="col-number">DQO</th>
+              <th class="col-number">SST</th>
+              <th class="col-number">A. Grasas</th>
+              <th class="col-number">N. Amoniacal</th>
+              <th class="col-number">Fósforo</th>
+              <th class="col-number">Sulfatos</th>
+              <th class="col-number">Sulfuros</th>
+              <th class="col-number">S. Sed.</th>
+              <th class="col-number">Poder Esp.</th>
+              <th class="col-number">Aluminio</th>
+              <th class="col-number">Arsénico</th>
+              <th class="col-number">Boro</th>
+              <th class="col-number">Cadmio</th>
+              <th class="col-number">Cianuro</th>
+              <th class="col-number">Cobre</th>
+              <th class="col-number">Cr. Hexa.</th>
+              <th class="col-number">Cr. Total</th>
+              <th class="col-number">HC Totales</th>
+              <th class="col-number">Manganeso</th>
+              <th class="col-number">Mercurio</th>
+              <th class="col-number">Níquel</th>
+              <th class="col-number">Plomo</th>
+              <th class="col-number">Zinc</th>
+              <th class="col-number">Vol. Día</th>
+              <th class="col-number">Vol. Mes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in analisis_list %}
+            <tr>
+              <td class="col-id">{{ item.id }}</td>
+              <td>
+                {% if item.fecha_muestreo %}
+                  {% if item.fecha_muestreo is string %}
+                    {{ item.fecha_muestreo[:10] }}
+                  {% else %}
+                    {{ item.fecha_muestreo.strftime('%Y-%m-%d') }}
+                  {% endif %}
+                {% else %}
+                  <span class="text-empty">-</span>
+                {% endif %}
+              </td>
+              <td>
+                {% if item.fecha_emision %}
+                  {% if item.fecha_emision is string %}
+                    {{ item.fecha_emision[:10] }}
+                  {% else %}
+                    {{ item.fecha_emision.strftime('%Y-%m-%d') }}
+                  {% endif %}
+                {% else %}
+                  <span class="text-empty">-</span>
+                {% endif %}
+              </td>
+              <td>{{ item.laboratorio if item.laboratorio else '-' }}</td>
+              <td>{{ item.empresa if item.empresa else '-' }}</td>
+              <td>{{ item.local_nombre if item.local_nombre else '-' }} (ID: {{ item.local_id if item.local_id else '-' }})</td>
+              <td class="col-subtext">{{ item.local_region if item.local_region else '-' }} / {{ item.local_comuna if item.local_comuna else '-' }}</td>
+              <td class="col-subtext">{{ item.local_direccion if item.local_direccion else '-' }}</td>
+              <td class="col-subtext">{{ item.tipo_monitoreo if item.tipo_monitoreo else '-' }}</td>
+              <td class="col-subtext">{{ item.tipo_muestreo if item.tipo_muestreo else '-' }}</td>
+              <td>{{ item.local_convenio if item.local_convenio else '-' }}</td>
+              <td class="col-number">{{ "%.2f"|format(item.local_rpm|float) if item.local_rpm != "" and item.local_rpm is not none else '-' }}</td>
+              <td class="col-number">{{ "%.2f"|format(item.ph|float) if item.ph != "" and item.ph is not none else '-' }}</td>
+              <td class="col-number">{{ "%.1f"|format(item.temperatura|float) if item.temperatura != "" and item.temperatura is not none else '-' }}</td>
+              <td class="col-number">{{ "%.1f"|format(item.dbo5|float) if item.dbo5 != "" and item.dbo5 is not none else '-' }}</td>
+              <td class="col-number">{{ "%.1f"|format(item.dqo|float) if item.dqo != "" and item.dqo is not none else '-' }}</td>
+              <td class="col-number">{{ "%.1f"|format(item.solidos_suspendidos_totales|float) if item.solidos_suspendidos_totales != "" and item.solidos_suspendidos_totales is not none else '-' }}</td>
+              <td class="col-number">{{ "%.1f"|format(item.aceites_grasas|float) if item.aceites_grasas != "" and item.aceites_grasas is not none else '-' }}</td>
+              <td class="col-number">{{ "%.2f"|format(item.nitrogeno_amoniacal|float) if item.nitrogeno_amoniacal != "" and item.nitrogeno_amoniacal is not none else '-' }}</td>
+              <td class="col-number">{{ "%.2f"|format(item.fosforo|float) if item.fosforo != "" and item.fosforo is not none else '-' }}</td>
+              <td class="col-number">{{ "%.1f"|format(item.sulfatos|float) if item.sulfatos != "" and item.sulfatos is not none else '-' }}</td>
+              <td class="col-number">{{ "%.2f"|format(item.sulfuros|float) if item.sulfuros != "" and item.sulfuros is not none else '-' }}</td>
+              <td class="col-number">{{ "%.2f"|format(item.solidos_sedimentables|float) if item.solidos_sedimentables != "" and item.solidos_sedimentables is not none else '-' }}</td>
+              <td class="col-number">{{ "%.1f"|format(item.poder_espumogeno|float) if item.poder_espumogeno != "" and item.poder_espumogeno is not none else '-' }}</td>
+              <td class="col-number">{{ "%.3f"|format(item.aluminio|float) if item.aluminio != "" and item.aluminio is not none else '-' }}</td>
+              <td class="col-number">{{ "%.3f"|format(item.arsenico|float) if item.arsenico != "" and item.arsenico is not none else '-' }}</td>
+              <td class="col-number">{{ "%.3f"|format(item.boro|float) if item.boro != "" and item.boro is not none else '-' }}</td>
+              <td class="col-number">{{ "%.3f"|format(item.cadmio|float) if item.cadmio != "" and item.cadmio is not none else '-' }}</td>
+              <td class="col-number">{{ "%.3f"|format(item.cianuro|float) if item.cianuro != "" and item.cianuro is not none else '-' }}</td>
+              <td class="col-number">{{ "%.3f"|format(item.cobre|float) if item.cobre != "" and item.cobre is not none else '-' }}</td>
+              <td class="col-number">{{ "%.3f"|format(item.cromo_hexavalente|float) if item.cromo_hexavalente != "" and item.cromo_hexavalente is not none else '-' }}</td>
+              <td class="col-number">{{ "%.3f"|format(item.cromo_total|float) if item.cromo_total != "" and item.cromo_total is not none else '-' }}</td>
+              <td class="col-number">{{ "%.3f"|format(item.hidrocarburos_totales|float) if item.hidrocarburos_totales != "" and item.hidrocarburos_totales is not none else '-' }}</td>
+              <td class="col-number">{{ "%.3f"|format(item.manganeso|float) if item.manganeso != "" and item.manganeso is not none else '-' }}</td>
+              <td class="col-number">{{ "%.4f"|format(item.mercurio|float) if item.mercurio != "" and item.mercurio is not none else '-' }}</td>
+              <td class="col-number">{{ "%.3f"|format(item.niquel|float) if item.niquel != "" and item.niquel is not none else '-' }}</td>
+              <td class="col-number">{{ "%.3f"|format(item.plomo|float) if item.plomo != "" and item.plomo is not none else '-' }}</td>
+              <td class="col-number">{{ "%.3f"|format(item.zinc|float) if item.zinc != "" and item.zinc is not none else '-' }}</td>
+              <td class="col-number">{{ "%.3f"|format(item.volumen_de_descarga_diaria|float) if item.volumen_de_descarga_diaria != "" and item.volumen_de_descarga_diaria is not none else '-' }}</td>
+              <td class="col-number">{{ "%.2f"|format(item.volumen_de_descarga_mensual|float) if item.volumen_de_descarga_mensual != "" and item.volumen_de_descarga_mensual is not none else '-' }}</td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="40" class="table-empty-row">No hay registros disponibles.</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. GRILLA DE GRÁFICOS INFERIOR -->
+  <section class="riles-charts-grid" id="chartsGrid">
+    <!-- Contenido inyectado dinámicamente vía JavaScript -->
+  </section>
+
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+  if (typeof ChartAnnotation !== 'undefined') {
+    Chart.register(ChartAnnotation);
+  }
+  if (typeof ChartDataLabels !== 'undefined') {
+    Chart.register(ChartDataLabels);
+  }
+
+  const rulesConfig = [
+    { "parametro": "Aceites y Grasas", "unidad": "mg/L", "expresion": "A y G", "minimo": 0.0, "maximo": 150.0, "id": 1, "key": "aceites_grasas" },
+    { "parametro": "Aluminio", "unidad": "mg/L", "expresion": "Al", "minimo": 0.0, "maximo": 10.0, "id": 2, "key": "aluminio" },
+    { "parametro": "Arsénico", "unidad": "mg/L", "expresion": "As", "minimo": 0.0, "maximo": 0.5, "id": 3, "key": "arsenico" },
+    { "parametro": "Boro", "unidad": "mg/L", "expresion": "B", "minimo": 0.0, "maximo": 4.0, "id": 4, "key": "boro" },
+    { "parametro": "Cadmio", "unidad": "mg/L", "expresion": "Cd", "minimo": 0.0, "maximo": 0.5, "id": 5, "key": "cadmio" },
+    { "parametro": "Cianuro", "unidad": "mg/L", "expresion": "CN-", "minimo": 0.0, "maximo": 1.0, "id": 6, "key": "cianuro" },
+    { "parametro": "Cobre", "unidad": "mg/L", "expresion": "Cu", "minimo": 0.0, "maximo": 3.0, "id": 7, "key": "cobre" },
+    { "parametro": "Cromo Hexavalente", "unidad": "mg/L", "expresion": "Cr+6", "minimo": 0.0, "maximo": 0.5, "id": 8, "key": "cromo_hexavalente" },
+    { "parametro": "Cromo Total", "unidad": "mg/L", "expresion": "Cr ", "minimo": 0.0, "maximo": 10.0, "id": 9, "key": "cromo_total" },
+    { "parametro": "Hidrocarburos Totales", "unidad": "mg/L", "expresion": "HC", "minimo": 0.0, "maximo": 20.0, "id": 10, "key": "hidrocarburos_totales" },
+    { "parametro": "Manganeso", "unidad": "mg/L", "expresion": "Mn", "minimo": 0.0, "maximo": 4.0, "id": 11, "key": "manganeso" },
+    { "parametro": "Mercurio", "unidad": "mg/L", "expresion": "Hg", "minimo": 0.0, "maximo": 0.02, "id": 12, "key": "mercurio" },
+    { "parametro": "Niquel", "unidad": "mg/L", "expresion": "Ni", "minimo": 0.0, "maximo": 4.0, "id": 13, "key": "niquel" },
+    { "parametro": "pH", "unidad": "Unidad", "expresion": "pH", "minimo": 5.5, "maximo": 9.0, "id": 14, "key": "ph" },
+    { "parametro": "Plomo", "unidad": "mg/L", "expresion": "Pb", "minimo": 0.0, "maximo": 1.0, "id": 15, "key": "plomo" },
+    { "parametro": "Poder Espumógeno", "unidad": "mm", "expresion": "PE", "minimo": 0.0, "maximo": 7.0, "id": 16, "key": "poder_espumogeno" },
+    { "parametro": "S. Sedimentables", "unidad": "mL/L 1h", "expresion": "S.D.", "minimo": 0.0, "maximo": 20.0, "id": 17, "key": "solidos_sedimentables" },
+    { "parametro": "Sulfatos", "unidad": "mg/L", "expresion": "SO4-02", "minimo": 0.0, "maximo": 1000.0, "id": 18, "key": "sulfatos" },
+    { "parametro": "Sulfuros", "unidad": "mg/L", "expresion": "S-3", "minimo": 0.0, "maximo": 5.0, "id": 19, "key": "sulfuros" },
+    { "parametro": "Temperatura", "unidad": "°C", "expresion": "T°", "minimo": 0.0, "maximo": 35.0, "id": 20, "key": "temperatura" },
+    { "parametro": "Zinc", "unidad": "mg/L", "expresion": "Zn", "minimo": 0.0, "maximo": 5.0, "id": 21, "key": "zinc" },
+    { "parametro": "DBO5", "unidad": "mg/L", "expresion": "DBO5", "minimo": 0.0, "maximo": 300.0, "id": 22, "key": "dbo5" },
+    { "parametro": "Fosforo", "unidad": "mg/L", "expresion": "P", "minimo": 0.0, "maximo": 15.0, "id": 23, "key": "fosforo" },
+    { "parametro": "Nitrogeno Amoniacal", "unidad": "mg/L", "expresion": "NH4+", "minimo": 0.0, "maximo": 80.0, "id": 24, "key": "nitrogeno_amoniacal" },
+    { "parametro": "Solidos Suspendidos Totales", "unidad": "mg/L", "expresion": "SS&", "minimo": 0.0, "maximo": 300.0, "id": 25, "key": "solidos_suspendidos_totales" }
+  ];
+
+  const rawData = [
+    {% for item in analisis_list %}
+    {
+      id: {{ item.id }},
+      fecha_muestreo: "{% if item.fecha_muestreo %}{% if item.fecha_muestreo is string %}{{ item.fecha_muestreo[:10] }}{% else %}{{ item.fecha_muestreo.strftime('%Y-%m-%d') }}{% endif %}{% endif %}",
+      dbo5: {% if item.dbo5 != "" and item.dbo5 is not none %}{{ item.dbo5 }}{% else %}null{% endif %},
+      dqo: {% if item.dqo != "" and item.dqo is not none %}{{ item.dqo }}{% else %}null{% endif %},
+      ph: {% if item.ph != "" and item.ph is not none %}{{ item.ph }}{% else %}null{% endif %},
+      temperatura: {% if item.temperatura != "" and item.temperatura is not none %}{{ item.temperatura }}{% else %}null{% endif %},
+      solidos_suspendidos_totales: {% if item.solidos_suspendidos_totales != "" and item.solidos_suspendidos_totales is not none %}{{ item.solidos_suspendidos_totales }}{% else %}null{% endif %},
+      aceites_grasas: {% if item.aceites_grasas != "" and item.aceites_grasas is not none %}{{ item.aceites_grasas }}{% else %}null{% endif %},
+      nitrogeno_amoniacal: {% if item.nitrogeno_amoniacal != "" and item.nitrogeno_amoniacal is not none %}{{ item.nitrogeno_amoniacal }}{% else %}null{% endif %},
+      fosforo: {% if item.fosforo != "" and item.fosforo is not none %}{{ item.fosforo }}{% else %}null{% endif %},
+      sulfatos: {% if item.sulfatos != "" and item.sulfatos is not none %}{{ item.sulfatos }}{% else %}null{% endif %},
+      sulfuros: {% if item.sulfuros != "" and item.sulfuros is not none %}{{ item.sulfuros }}{% else %}null{% endif %},
+      solidos_sedimentables: {% if item.solidos_sedimentables != "" and item.solidos_sedimentables is not none %}{{ item.solidos_sedimentables }}{% else %}null{% endif %},
+      poder_espumogeno: {% if item.poder_espumogeno != "" and item.poder_espumogeno is not none %}{{ item.poder_espumogeno }}{% else %}null{% endif %},
+      aluminio: {% if item.aluminio != "" and item.aluminio is not none %}{{ item.aluminio }}{% else %}null{% endif %},
+      arsenico: {% if item.arsenico != "" and item.arsenico is not none %}{{ item.arsenico }}{% else %}null{% endif %},
+      boro: {% if item.boro != "" and item.boro is not none %}{{ item.boro }}{% else %}null{% endif %},
+      cadmio: {% if item.cadmio != "" and item.cadmio is not none %}{{ item.cadmio }}{% else %}null{% endif %},
+      cianuro: {% if item.cianuro != "" and item.cianuro is not none %}{{ item.cianuro }}{% else %}null{% endif %},
+      cobre: {% if item.cobre != "" and item.cobre is not none %}{{ item.cobre }}{% else %}null{% endif %},
+      cromo_hexavalente: {% if item.cromo_hexavalente != "" and item.cromo_hexavalente is not none %}{{ item.cromo_hexavalente }}{% else %}null{% endif %},
+      cromo_total: {% if item.cromo_total != "" and item.cromo_total is not none %}{{ item.cromo_total }}{% else %}null{% endif %},
+      hidrocarburos_totales: {% if item.hidrocarburos_totales != "" and item.hidrocarburos_totales is not none %}{{ item.hidrocarburos_totales }}{% else %}null{% endif %},
+      manganeso: {% if item.manganeso != "" and item.manganeso is not none %}{{ item.manganeso }}{% else %}null{% endif %},
+      mercurio: {% if item.mercurio != "" and item.mercurio is not none %}{{ item.mercurio }}{% else %}null{% endif %},
+      niquel: {% if item.niquel != "" and item.niquel is not none %}{{ item.niquel }}{% else %}null{% endif %},
+      plomo: {% if item.plomo != "" and item.plomo is not none %}{{ item.plomo }}{% else %}null{% endif %},
+      zinc: {% if item.zinc != "" and item.zinc is not none %}{{ item.zinc }}{% else %}null{% endif %}
+    }{% if not loop.last %},{% endif %}
+    {% endfor %}
+  ];
+
+  if (!rawData || rawData.length === 0) return;
+
+  const sortedData = rawData.slice().sort((a, b) => new Date(a.fecha_muestreo) - new Date(b.fecha_muestreo));
+  const labels = sortedData.map(item => item.fecha_muestreo || 'Sin Fecha');
+  const gridContainer = document.getElementById('chartsGrid');
+  const tableWrapper = document.getElementById('rilesTableWrapper');
+
+  // Función de evaluación de límites para cada celda
+  function getRuleStatus(val, rule) {
+    if (val === null || val === undefined || val === "" || isNaN(val)) {
+      return { class: 'cell-empty', text: '-' };
+    }
+
+    const numVal = parseFloat(val);
+    if (!rule) return { class: 'cell-normal', text: Number.isInteger(numVal) ? numVal.toString() : numVal.toFixed(2) };
+
+    const maxLimit = rule.maximo;
+    const minLimit = rule.minimo;
+
+    if (rule.key === 'ph') {
+      if (numVal < minLimit || numVal > maxLimit) {
+        return { class: 'cell-danger', text: numVal.toFixed(2) };
+      }
+      return { class: 'cell-normal', text: numVal.toFixed(2) };
+    }
+
+    if (maxLimit > 0) {
+      const ratio = numVal / maxLimit;
+      if (ratio > 2.0) {
+        return { class: 'cell-danger', text: numVal.toFixed(2) };
+      } else if (ratio > 1.0) {
+        return { class: 'cell-warning', text: numVal.toFixed(2) };
+      }
+    }
+
+    return { class: 'cell-normal', text: Number.isInteger(numVal) ? numVal.toString() : numVal.toFixed(2) };
+  }
+
+  // ==========================================
+  // 1. CONSTRUCCIÓN DE LA TABLA VERTICAL (Muestreos en filas)
+  // ==========================================
+  if (tableWrapper) {
+    // Filtrar solo los parámetros que contienen al menos un dato
+    const activeRules = rulesConfig.filter(rule => {
+      return sortedData.some(item => {
+        const v = item[rule.key];
+        return v !== null && v !== undefined && v !== "" && !isNaN(v);
+      });
+    });
+
+    let tableHtml = `
+      <table class="riles-table">
+        <thead>
+          <tr>
+            <th>Fecha Muestreo</th>
+            ${activeRules.map(r => `
+              <th>
+                ${r.parametro}
+                <small>(${r.unidad} | Máx: ${r.maximo})</small>
+              </th>
+            `).join('')}
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    sortedData.forEach(row => {
+      tableHtml += `
+        <tr>
+          <td style="font-weight: 600; text-align: left;">${row.fecha_muestreo || 'Sin Fecha'}</td>
+      `;
+
+      activeRules.forEach(rule => {
+        const rawVal = row[rule.key];
+        const status = getRuleStatus(rawVal, rule);
+        tableHtml += `<td class="${status.class}">${status.text}</td>`;
+      });
+
+      tableHtml += `</tr>`;
+    });
+
+    tableHtml += `
+        </tbody>
+      </table>
+    `;
+
+    tableWrapper.innerHTML = tableHtml;
+  }
+  // ==========================================
+  // 2. CONSTRUCCIÓN DE LOS GRÁFICOS
+  // ==========================================
+  rulesConfig.forEach(param => {
+    const values = sortedData.map(item => {
+      const val = item[param.key];
+      return (val !== null && val !== undefined && val !== "" && !isNaN(val)) ? parseFloat(val) : null;
+    });
+
+    const hasData = values.some(v => v !== null);
+    if (!hasData) return;
+
+    const maxLimit = param.maximo;
+    const minLimit = param.minimo;
+    let maxExceededRatio = 0;
+
+    const bgColors = values.map(val => {
+      if (val === null) return 'rgba(209, 213, 219, 0.5)';
+      
+      if (maxLimit > 0) {
+        const ratio = val / maxLimit;
+        if (ratio > maxExceededRatio) maxExceededRatio = ratio;
+
+        if (ratio > 2.0) return '#ef4444';
+        if (ratio > 1.0) return '#f59e0b';
+      }
+
+      if (param.key === 'ph' && (val < minLimit || val > maxLimit)) {
+        return '#ef4444';
+      }
+
+      return '#2563eb';
+    });
+
+    let badgeHtml = `<span class="badge-limit badge-limit-ok">Normal</span>`;
+    if (maxExceededRatio > 2.0) {
+      badgeHtml = `<span class="badge-limit badge-limit-danger">> 200% Máx</span>`;
+    } else if (maxExceededRatio > 1.0) {
+      badgeHtml = `<span class="badge-limit badge-limit-warning">> 100% Máx</span>`;
+    }
+
+    const card = document.createElement('div');
+    card.className = 'riles-chart-card';
+    card.innerHTML = `
+      <div class="riles-chart-card-header">
+        <div>
+          <h5 class="riles-chart-card-title">${param.parametro}</h5>
+          <p class="riles-chart-card-subtitle">Unidad: ${param.unidad} | Máx: ${maxLimit}</p>
+        </div>
+        ${badgeHtml}
+      </div>
+      <div class="chart-container-card" style="position: relative; height: 220px; width: 100%;">
+        <canvas id="chart_${param.key}"></canvas>
+      </div>
+    `;
+    gridContainer.appendChild(card);
+
+    const ctx = card.querySelector('canvas').getContext('2d');
+
+    const annotations = {};
+    if (maxLimit !== null && maxLimit !== undefined) {
+      annotations['maxLine'] = {
+        type: 'line',
+        yMin: maxLimit,
+        yMax: maxLimit,
+        borderColor: '#dc2626',
+        borderWidth: 2,
+        borderDash: [4, 4],
+        label: {
+          display: true,
+          content: `Lím. Máx: ${maxLimit}`,
+          position: 'end',
+          backgroundColor: 'rgba(220, 38, 38, 0.8)',
+          color: '#fff',
+          font: { size: 9 }
+        }
+      };
+    }
+
+    if (param.key === 'ph' && minLimit) {
+      annotations['minLine'] = {
+        type: 'line',
+        yMin: minLimit,
+        yMax: minLimit,
+        borderColor: '#dc2626',
+        borderWidth: 2,
+        borderDash: [4, 4],
+        label: {
+          display: true,
+          content: `Lím. Min: ${minLimit}`,
+          position: 'start',
+          backgroundColor: 'rgba(220, 38, 38, 0.8)',
+          color: '#fff',
+          font: { size: 9 }
+        }
+      };
+    }
+
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: `${param.parametro} (${param.unidad})`,
+          data: values,
+          backgroundColor: bgColors,
+          borderRadius: 4,
+          maxBarThickness: 40
+        }]
+      },
+      options: {
+        animation: false,
+        responsive: true,
+        maintainAspectRatio: false,
+        layout: {
+          padding: {
+            top: 28,
+            left: 8,
+            right: 8,
+            bottom: 4
+          }
+        },
+        plugins: {
+          legend: { display: false },
+          annotation: { annotations: annotations },
+          datalabels: {
+            anchor: 'end',
+            align: 'end',
+            offset: 4,
+            color: '#0f172a',
+            backgroundColor: '#ffffff',
+            borderColor: '#cbd5e1',
+            borderWidth: 1,
+            borderRadius: 3,
+            padding: { top: 2, bottom: 2, left: 4, right: 4 },
+            font: { size: 8, weight: 'bold', family: 'sans-serif' },
+            formatter: function (value) {
+              if (value === null || value === undefined) return '';
+              return Number.isInteger(value) ? value : value.toFixed(2);
+            }
+          }
+        },
+        scales: {
+          x: {
+            ticks: { font: { size: 9 }, color: '#334155' },
+            grid: { display: false }
+          },
+          y: {
+            beginAtZero: true,
+            grace: '10%',
+            ticks: { font: { size: 9 }, color: '#334155' },
+            grid: { color: 'rgba(0, 0, 0, 0.06)' }
+          }
+        }
+      }
+    });
+  });
+
+  // ==========================================
+  // 3. EXPORTACIÓN A PDF EN GRILLA 3 COLUMNAS
+  // ==========================================
+  const btnScreenshot = document.getElementById('btnScreenshot');
+  btnScreenshot.addEventListener('click', async function () {
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF('p', 'mm', 'a4');
+
+    btnScreenshot.classList.add('loading');
+    btnScreenshot.disabled = true;
+
+    const margin = 8;
+    const pageWidth = 210;
+    const pageHeight = 297;
+    const contentWidth = pageWidth - (margin * 2);
+    
+    const columns = 3;
+    const gap = 3;
+    const cardWidth = (contentWidth - (gap * (columns - 1))) / columns;
+
+    let currentX = margin;
+    let currentY = margin;
+    let colIndex = 0;
+    let maxRowHeight = 0;
+
+    try {
+      if (tableWrapper && tableWrapper.innerText.trim() !== "") {
+        const canvasTable = await html2canvas(tableWrapper, { scale: 2, logging: false });
+        const imgHeight = (canvasTable.height * contentWidth) / canvasTable.width;
+        
+        pdf.addImage(canvasTable.toDataURL('image/png'), 'PNG', margin, currentY, contentWidth, imgHeight);
+        currentY += imgHeight + 6;
+      }
+
+      const chartCards = document.querySelectorAll('.riles-chart-card');
+
+      for (let i = 0; i < chartCards.length; i++) {
+        const card = chartCards[i];
+
+        const canvasCard = await html2canvas(card, {
+          scale: 2,
+          logging: false,
+          backgroundColor: '#ffffff'
+        });
+
+        const cardHeight = (canvasCard.height * cardWidth) / canvasCard.width;
+
+        if (colIndex === 0) {
+          if (currentY + cardHeight > pageHeight - margin) {
+            pdf.addPage();
+            currentY = margin;
+          }
+        }
+
+        currentX = margin + (colIndex * (cardWidth + gap));
+
+        pdf.addImage(canvasCard.toDataURL('image/png'), 'PNG', currentX, currentY, cardWidth, cardHeight);
+
+        if (cardHeight > maxRowHeight) {
+          maxRowHeight = cardHeight;
+        }
+
+        colIndex++;
+
+        if (colIndex >= columns) {
+          colIndex = 0;
+          currentY += maxRowHeight + gap;
+          maxRowHeight = 0;
+        }
+      }
+
+      const today = new Date().toISOString().split('T')[0];
+      pdf.save(`Reporte_RILES_${today}.pdf`);
+
+    } catch (err) {
+      console.error('Error generando el PDF:', err);
+    } finally {
+      btnScreenshot.classList.remove('loading');
+      btnScreenshot.disabled = false;
+    }
+  });
+});
+</script>
+{% endblock %}

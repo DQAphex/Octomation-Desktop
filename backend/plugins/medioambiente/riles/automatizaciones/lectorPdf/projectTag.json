@@ -1,0 +1,7 @@
+{
+  "projectId":"riles_lectura_pdf",
+  "projectName":"Lectura de PDF",
+  "projectDesc":"Automatización que lee pdf de RILES",
+  "projectType":"Automation",
+  "projectMd":"lectorPDF"
+}

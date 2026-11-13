@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+{% block extra_css %}
+  <link rel="stylesheet" href="{{ url_for('static', path='style/riles/main.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='style/riles/sendmail.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="riles-container">
+  <div class="title-filter">
+    <div class="title">
+      <h2>Gestión de Riles</h2>
+    </div>
+    <div class="list nav-bar">
+      <a href="/medioambiente/riles/inbox" class="nav">
+        <span class="material-symbols-outlined mi-icono">home</span>
+        Inbox
+      </a>
+      <a href="/medioambiente/riles/upload" class="nav">
+        <span class="material-symbols-outlined mi-icono">upload_file</span>
+        Subir
+      </a>
+      <a href="/medioambiente/riles/send-mails" class="nav active">
+        <span class="material-symbols-outlined mi-icono">send</span>
+        Enviar Correos
+      </a>
+      <a href="/medioambiente/riles/store-list" class="nav">
+        <span class="material-symbols-outlined mi-icono">storefront</span>
+        Lista de locales
+      </a>
+      <a href="/medioambiente/riles/parameter-limits" class="nav">
+        <span class="material-symbols-outlined mi-icono">widget_width</span>
+        Parámetros
+      </a>
+    </div>
+  </div>
+
+  <div class="Automation-list">
+    <div class="title">
+      <h2>Análisis Pendientes de Envío</h2>
+    </div>
+    
+    <!-- Acciones Globales (Masivas por Checkbox) -->
+    <div class="global-actions" style="margin-bottom: 1rem; display: flex; gap: 10px; align-items: center;">
+      <button type="button" class="button" onclick="sendSelectedMailing('local')">
+        <span class="material-symbols-outlined mi-icono">send</span>
+        Enviar Seleccionados a Local
+      </button>
+      <button type="button" class="button" onclick="sendSelectedMailing('sanitaria')">
+        <span class="material-symbols-outlined mi-icono">send</span>
+        Enviar Seleccionados a Sanitaria
+      </button>
+    </div>
+
+    <div class="riles-table-container">
+      <table class="riles-table">
+        <thead>
+          <tr>
+            <th class="text-center" style="width: 40px;">
+              <input type="checkbox" id="select-all" onclick="toggleSelectAll(this)">
+            </th>
+            <th>ID Análisis</th>
+            <th>Estado Local</th>
+            <th>Estado Sanitaria</th>
+            <th>Tipo Monitoreo</th>
+            <th>Tolerable</th>
+            <th class="text-center">Páram. Tolerables</th>
+            <th class="text-center">Páram. Extremos</th>
+            <th class="text-center" style="min-width: 180px;">Acciones Individuales</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in analisis_list %}
+            <tr id="row-{{ item.id_analisis }}" data-tolerable="{{ 'true' if item.tolerable else 'false' }}">
+              <td class="text-center">
+                <input type="checkbox" class="item-checkbox" value="{{ item.id_analisis }}">
+              </td>
+              <td><strong>#{{ item.id_analisis }}</strong></td>
+              <td>
+                <span class="badge badge-warning">
+                  {{ item.status_local }}
+                </span>
+              </td>
+              <td>
+                <span class="badge badge-warning">
+                  {{ item.status_sanitaria }}
+                </span>
+              </td>
+              <td>
+                <span class="badge badge-info">
+                  {{ item.tipo_monitoreo }}
+                </span>
+              </td>
+              <td>
+                {% if item.tolerable %}
+                  <span class="badge badge-success">SI</span>
+                {% else %}
+                  <span class="badge badge-danger">NO</span>
+                {% endif %}
+              </td>
+              <td class="text-center">
+                <span class="badge badge-gray badge-count">
+                  {{ item.parametros_tolerables_count }}
+                </span>
+              </td>
+              <td class="text-center">
+                <span class="badge {% if item.parametros_extremos_count > 0 %}badge-danger{% else %}badge-gray{% endif %} badge-count">
+                  {{ item.parametros_extremos_count }}
+                </span>
+              </td>
+              <td class="text-center">
+                <div style="display: flex; gap: 6px; justify-content: center;">
+                  <button 
+                    type="button" 
+                    class="button button-sm" 
+                    style="padding: 4px 8px; font-size: 0.8rem;"
+                    title="Enviar este análisis a Local" 
+                    onclick="sendSingleMailing({{ item.id_analisis }}, 'local')">
+                    <span class="material-symbols-outlined mi-icono" style="font-size: 16px;">store</span>
+                    Local
+                  </button>
+                  <button 
+                    type="button" 
+                    class="button button-sm" 
+                    style="padding: 4px 8px; font-size: 0.8rem;"
+                    title="{% if not item.tolerable %}No se puede enviar a sanitaria por no ser tolerable{% else %}Enviar este análisis a Sanitaria{% endif %}" 
+                    onclick="sendSingleMailing({{ item.id_analisis }}, 'sanitaria')"
+                    {% if not item.tolerable %}disabled style="padding: 4px 8px; font-size: 0.8rem; opacity: 0.5; cursor: not-allowed;"{% endif %}>
+                    <span class="material-symbols-outlined mi-icono" style="font-size: 16px;">water_drop</span>
+                    Sanitaria
+                  </button>
+                </div>
+              </td>
+            </tr>
+          {% else %}
+            <tr>
+              <td colspan="9" class="text-center" style="padding: 24px; color: #6b7280;">
+                No hay análisis pendientes en la cola de envío.
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+// Selector global masivo
+function toggleSelectAll(masterCheckbox) {
+  const checkboxes = document.querySelectorAll('.item-checkbox');
+  checkboxes.forEach(cb => cb.checked = masterCheckbox.checked);
+}
+
+// Envío individual desde la fila de la tabla
+async function sendSingleMailing(analysisId, type) {
+  const row = document.getElementById(`row-${analysisId}`);
+  const isTolerable = row.getAttribute('data-tolerable') === 'true';
+
+  if (type === 'sanitaria' && !isTolerable) {
+    alert(`El análisis #${analysisId} no es tolerable y no se puede enviar a Sanitaria.`);
+    return;
+  }
+
+  const targetName = type === 'local' ? 'al Local' : 'a Sanitaria';
+  const confirmed = confirm(`¿Deseas enviar el análisis #${analysisId} ${targetName}?`);
+  if (!confirmed) return;
+
+  const buttons = document.querySelectorAll('button');
+  try {
+    buttons.forEach(btn => btn.disabled = true);
+    await executeSendRequest(analysisId, type);
+    alert(`Correo del análisis #${analysisId} enviado correctamente ${targetName}.`);
+    window.location.reload();
+  } catch (error) {
+    console.error(`Error enviando análisis #${analysisId}:`, error);
+    alert(`Ocurrió un error al enviar el análisis #${analysisId}: ${error.message}`);
+  } finally {
+    buttons.forEach(btn => btn.disabled = false);
+  }
+}
+
+// Envío masivo según ítems marcados en checkbox
+async function sendSelectedMailing(type) {
+  const selectedCheckboxes = Array.from(document.querySelectorAll('.item-checkbox:checked'));
+  
+  if (selectedCheckboxes.length === 0) {
+    alert('Por favor, selecciona al menos un análisis usando las casillas de verificación.');
+    return;
+  }
+
+  // Filtrado de elementos si el destino es sanitaria
+  let itemsToProcess = [];
+  let skippedCount = 0;
+
+  selectedCheckboxes.forEach(cb => {
+    const analysisId = cb.value;
+    const row = document.getElementById(`row-${analysisId}`);
+    const isTolerable = row.getAttribute('data-tolerable') === 'true';
+
+    if (type === 'sanitaria' && !isTolerable) {
+      skippedCount++;
+    } else {
+      itemsToProcess.push(analysisId);
+    }
+  });
+
+  if (itemsToProcess.length === 0) {
+    alert('Ninguno de los análisis seleccionados cumple las condiciones para ser enviado a Sanitaria (no son tolerables).');
+    return;
+  }
+
+  const targetName = type === 'local' ? 'a los Locales' : 'a Sanitaria';
+  let confirmMessage = `¿Estás seguro de que deseas enviar ${itemsToProcess.length} análisis ${targetName}?`;
+  if (type === 'sanitaria' && skippedCount > 0) {
+    confirmMessage += `\n\n(Nota: Se ignorarán ${skippedCount} análisis seleccionados por no ser tolerables).`;
+  }
+
+  const confirmed = confirm(confirmMessage);
+  if (!confirmed) return;
+
+  const buttons = document.querySelectorAll('button');
+  buttons.forEach(btn => btn.disabled = true);
+
+  let successCount = 0;
+  let failCount = 0;
+  const errors = [];
+
+  for (const analysisId of itemsToProcess) {
+    try {
+      await executeSendRequest(analysisId, type);
+      successCount++;
+    } catch (error) {
+      failCount++;
+      errors.push(`Análisis #${analysisId}: ${error.message}`);
+    }
+  }
+
+  buttons.forEach(btn => btn.disabled = false);
+
+  let summaryMessage = `Proceso finalizado:\n- Envíos exitosos: ${successCount}\n- Envíos fallidos: ${failCount}`;
+  if (skippedCount > 0) {
+    summaryMessage += `\n- Omitidos (No tolerables): ${skippedCount}`;
+  }
+  if (errors.length > 0) {
+    summaryMessage += `\n\nDetalles de errores:\n` + errors.join('\n');
+  }
+
+  alert(summaryMessage);
+  window.location.reload();
+}
+
+// Consumo directo del endpoint FastAPI POST con Query Parameters
+async function executeSendRequest(analysisId, type) {
+  const params = new URLSearchParams({
+    analysis_id: analysisId,
+    type: type
+  });
+
+  const endpoint = `/medioambiente/riles/api/v1/send-analysis-mailing?${params.toString()}`;
+
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      'Accept': 'application/json'
+    }
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Error en el servidor (Status ${response.status})`);
+  }
+
+  return await response.json();
+}
+</script>
+{% endblock %}
